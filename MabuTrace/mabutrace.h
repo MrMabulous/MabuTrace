@@ -142,6 +142,7 @@ typedef struct {
 
 void profiler_init();
 void profiler_deinit();
+size_t get_buffer_size();
 void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* out_end_idx);
 void profiler_get_task_handles(void* output_taskhandle_16);
 profiler_duration_handle_t trace_begin(const char* name, uint8_t color);

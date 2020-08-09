@@ -44,6 +44,17 @@ void profiler_init() {
   type_sizes[EVENT_TYPE_LINK] = sizeof(link_entry_t);
 }
 
+size_t get_smallest_type_size() {
+  assert(("Profiler has not been initialized", proffiler_entries));
+  size_t min_size = 1000;
+  for(int i=0; i<sizeof(type_sizes); i++) {
+    size_t size = type_sizes[i];
+    if(size != 0 && size < min_size)
+      min_size = size;
+  }
+  return min_size;
+}
+
 void profiler_deinit() {
   if(!profiler_entries)
     return;
@@ -51,6 +62,10 @@ void profiler_deinit() {
   free(profiler_entries);
   profiler_entries = NULL;
   taskEXIT_CRITICAL(&profiler_index_mutex);
+}
+
+size_t get_buffer_size() {
+  return PROFILER_BUFFER_SIZE_IN_BYTES;
 }
 
 inline TaskHandle_t IRAM_ATTR get_current_task_handle() {
@@ -152,6 +167,10 @@ void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* ou
     *out_start_idx = entries_start_index;
     *out_end_idx = entries_next_index;
   taskEXIT_CRITICAL(&profiler_index_mutex);
+}
+
+size_t get_num_task_handles() {
+  return 16;
 }
 
 void profiler_get_task_handles(void* output_taskhandle_16) {
