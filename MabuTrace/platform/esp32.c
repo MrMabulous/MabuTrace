@@ -1,4 +1,4 @@
-#include "mabutrace.h"
+#include "../mabutrace.h"
 
 #include <string.h>
 
@@ -19,20 +19,25 @@ static volatile uint16_t link_index = 0;
 static volatile portMUX_TYPE link_index_mutex = portMUX_INITIALIZER_UNLOCKED;
 static volatile TaskHandle_t task_handles[16];
 static volatile uint8_t type_sizes[8];
-
+static volatile size_t buffer_size_in_bytes;
 
 void profiler_init() {
+  profiler_init_with_size(PROFILER_BUFFER_SIZE_IN_BYTES);
+}
+
+void profiler_init_with_size(size_t ring_buffer_size_in_bytes) {
+  buffer_size_in_bytes = ring_buffer_size_in_bytes;
   if(profiler_entries)
     return;
 #ifdef USE_PSRAM_IF_AVAILABLE
-  profiler_entries = heap_caps_calloc(PROFILER_BUFFER_SIZE_IN_BYTES, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+  profiler_entries = heap_caps_calloc(ring_buffer_size_in_bytes, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 #endif
   if(!profiler_entries)
-    profiler_entries = calloc(PROFILER_BUFFER_SIZE_IN_BYTES, 1);
+    profiler_entries = calloc(ring_buffer_size_in_bytes, 1);
   if (!profiler_entries)
     ets_printf("Failed to allocate trace buffer.\n");
   else
-    ets_printf("Allocated %d bytes for trace buffer.\n", (int)PROFILER_BUFFER_SIZE_IN_BYTES);
+    ets_printf("Allocated %d bytes for trace buffer.\n", (int)ring_buffer_size_in_bytes);
   memset(task_handles, 0, sizeof(task_handles));
 
   memset(type_sizes, 0, sizeof(type_sizes));
@@ -90,15 +95,15 @@ inline void IRAM_ATTR advance_pointers(uint8_t type_size, size_t* out_entry_idx)
     return;
   taskENTER_CRITICAL(&profiler_index_mutex);
   {
-    assert(entries_next_index <= PROFILER_BUFFER_SIZE_IN_BYTES);
+    assert(entries_next_index <= buffer_size_in_bytes);
     //critical section
     size_t start_idx = 0;
     size_t entry_idx = entries_next_index;
     //advance pointers
-    if (PROFILER_BUFFER_SIZE_IN_BYTES - entry_idx < type_size) {
+    if (buffer_size_in_bytes - entry_idx < type_size) {
       // entry doesn't fit into end of buffer.
       // clear tail to indicate end.
-      memset(profiler_entries + entries_next_index, 0, PROFILER_BUFFER_SIZE_IN_BYTES - entry_idx);
+      memset(profiler_entries + entries_next_index, 0, buffer_size_in_bytes - entry_idx);
       // set entry_idx to start of buffer.
       entry_idx = 0;
       start_idx = 0;
@@ -120,7 +125,7 @@ inline void IRAM_ATTR advance_pointers(uint8_t type_size, size_t* out_entry_idx)
         start_idx += type_sizes[start_header->type];
       }
     }
-    if (start_idx == PROFILER_BUFFER_SIZE_IN_BYTES) {
+    if (start_idx == buffer_size_in_bytes) {
       start_idx = 0;
     }
     entries_start_index = start_idx;
@@ -148,7 +153,7 @@ void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* ou
   if(!profiler_entries)
     return;
   taskENTER_CRITICAL(&profiler_index_mutex);
-    memcpy(output_buffer, profiler_entries, PROFILER_BUFFER_SIZE_IN_BYTES);
+    memcpy(output_buffer, profiler_entries, buffer_size_in_bytes);
     *out_start_idx = entries_start_index;
     *out_end_idx = entries_next_index;
   taskEXIT_CRITICAL(&profiler_index_mutex);
