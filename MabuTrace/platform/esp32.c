@@ -60,6 +60,17 @@ size_t get_smallest_type_size() {
   return min_size;
 }
 
+size_t get_smallest_type_size() {
+  assert(("Profiler has not been initialized", proffiler_entries));
+  size_t min_size = 1000;
+  for(int i=0; i<sizeof(type_sizes); i++) {
+    size_t size = type_sizes[i];
+    if(size != 0 && size < min_size)
+      min_size = size;
+  }
+  return min_size;
+}
+
 void profiler_deinit() {
   if(!profiler_entries)
     return;

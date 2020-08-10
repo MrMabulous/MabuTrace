@@ -1,3 +1,6 @@
+#ifndef __MABUTRACE_ESP32_H__
+#define __MABUTRACE_ESP32_H__
+
 /*
 * Size of the circular buffer.
 */
@@ -106,3 +109,5 @@ typedef struct {
     };
   };
 } profiler_entry_t;
+
+#endif  // __MABUTRACE_ESP32_H__

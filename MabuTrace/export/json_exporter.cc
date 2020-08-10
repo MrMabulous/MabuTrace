@@ -1,24 +1,22 @@
+#include "json_exporter.h"
+
 #include "../mabutrace.h"
 
 #include <assert.h>
 #include <fstream>
-#include <string>
 #include <iostream>
 
 // An upper bound estimate for the number of chars required for the json output of each entry
 #define MAX_CHARS_PER_ENTRY 256
 
 std::string get_json_trace() {
-  char* profilerEntries;
+  char* profiler_entries;
   size_t profiler_buffer_size = get_buffer_size();
-  profilerEntries = new char[profiler_buffer_size];
+  profiler_entries = new char[profiler_buffer_size];
 
   size_t start_idx;
   size_t end_idx;
-  profiler_get_entries(profilerEntries, &start_idx, &end_idx);
-  size_t num_task_handles = get_num_task_handles();
-  TaskHandle_t* task_handles = new TaskHandle_t[num_task_handles]; 
-  profiler_get_task_handles(task_handles);
+  profiler_get_entries(profiler_entries, &start_idx, &end_idx);
 
   static const char* colorNameLookup[] = {
     "",                                        // COLOR_UNDEFINED
@@ -60,19 +58,16 @@ std::string get_json_trace() {
   size_t idx = start_idx;
   size_t loopCount = 0;
   do {
-    entry_header_t* entry_header = (entry_header_t*)(profilerEntries + idx);
+    entry_header_t* entry_header = (entry_header_t*)(profiler_entries + idx);
     if(entry_header->type == EVENT_TYPE_NONE) {
       idx = 0;
       loopCount++;
       continue;
     }
 
-    std::string threadNameStr = "Thread_" + std::to_string(task_handles[entry_header->task_id]);
+    std::string threadNameStr = std::string("Unnamed_") + std::to_string(entry_header->task_id);
     //char* threadName = pcTaskGetTaskName(task_handles[entry_header->task_id]);
-    char* threadName = threadNameStr.c_str();
-    if(entry_header->task_id == 0) {
-      threadName = (char*)"INTERRUPT";
-    }
+    const char* threadName = (entry_header->task_id == 0) ? (char*)"INTERRUPT" : threadNameStr.c_str();
     size_t entry_size;
     switch (entry_header->type) {
       case EVENT_TYPE_DURATION: {
@@ -129,18 +124,18 @@ std::string get_json_trace() {
     }
   } while (idx != end_idx && loopCount <= 1);
 
-  lineLength = sprintf(json_buffer, "%s", json_footer);
+  lineLength = sprintf(chunk + ofst, "%s", json_footer);
 
   std::string result(json_buffer);
   delete[] json_buffer;
   delete[] profiler_entries;
-  delete[] task_handles;
 
   return result;
 }
 
 bool write_to_file(std::string file_path) {
-    std::ofstream out(file_path);
-    out << get_json_trace();
-    out.close();
+  std::ofstream out(file_path);
+  out << get_json_trace();
+  out.close();
+  return true;
 }

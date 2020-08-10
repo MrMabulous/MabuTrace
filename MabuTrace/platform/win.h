@@ -1,12 +1,11 @@
-#ifndef PROFILER_BUFFER_SIZE_IN_BYTES
-  #error specify PROFILER_BUFFER_SIZE_IN_BYTES
-#endif
+#ifndef __MABUTRACE_WIN_H__
+#define __MABUTRACE_WIN_H__
 
 typedef struct {
   uint64_t time_stamp_begin_microseconds;
   const char* name;
-  uint32_t link_in;
-  uint32_t link_out;
+  uint16_t link_in;
+  uint16_t link_out;
   uint8_t color; 
 } profiler_duration_handle_t;
 
@@ -83,7 +82,7 @@ typedef struct {
   // 0: in, 1: out
   uint8_t link_type;
   // Link id
-  uint32_t link;
+  uint16_t link;
   // Start of event start in microseconds since device started.
   uint64_t time_stamp_begin_microseconds;
 } link_entry_t;
@@ -97,8 +96,8 @@ typedef struct {
   // One of a few predefined color values.
   uint8_t color;
   // Flow Event id's to visualize links between events.
-  uint32_t link_in;
-  uint32_t link_out;
+  uint16_t link_in;
+  uint16_t link_out;
   // FreeRTOS task handle. NULL if called from interrupt.
   void* task_handle;
   // Name of the event.
@@ -118,3 +117,5 @@ typedef struct {
     };
   };
 } profiler_entry_t;
+
+#endif  // __MABUTRACE_WIN_H__

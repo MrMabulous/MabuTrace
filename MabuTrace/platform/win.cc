@@ -8,13 +8,17 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+#ifndef PROFILER_BUFFER_SIZE_IN_BYTES
+  #error specify PROFILER_BUFFER_SIZE_IN_BYTES
+#endif
+
 typedef DWORD TaskHandle_t;
 
 static char* profiler_entries = nullptr;
 static size_t entries_start_index = 0;
 static size_t entries_next_index = 0;
 static std::mutex profiler_index_mutex;
-static uint32_t link_index = 0;
+static uint16_t link_index = 0;
 static std::mutex link_index_mutex;
 //static TaskHandle_t task_handles[16];
 static std::shared_mutex task_handle_mutex;
@@ -75,6 +79,17 @@ void profiler_init_with_size(size_t ring_buffer_size_in_bytes) {
   type_sizes[EVENT_TYPE_LINK] = sizeof(link_entry_t);
 }
 
+size_t get_smallest_type_size() {
+  assert(("Profiler has not been initialized", proffiler_entries));
+  size_t min_size = 1000;
+  for(int i=0; i<sizeof(type_sizes); i++) {
+    size_t size = type_sizes[i];
+    if(size != 0 && size < min_size)
+      min_size = size;
+  }
+  return min_size;
+}
+
 void profiler_deinit() {
   if(!profiler_entries)
     return;
@@ -82,6 +97,10 @@ void profiler_deinit() {
   free(profiler_entries);
   profiler_entries = nullptr;
   EXIT_CRITICAL(&profiler_index_mutex);
+}
+
+size_t get_buffer_size() {
+  return buffer_size_in_bytes;
 }
 
 inline TaskHandle_t get_current_task_handle() {
@@ -96,8 +115,9 @@ inline uint8_t get_cpu_id() {
 
 inline TaskHandle_t get_task_handle_from_id(uint8_t id) {
   ENTER_CRITICAL_READ(&task_handle_mutex);
-  return reverse_task_handles[id];
+  TaskHandle_t result = reverse_task_handles[id];
   EXIT_CRITICAL_READ(&task_handle_mutex);
+  return result;
 }
 
 inline uint64_t now_in_microseconds() {
@@ -124,7 +144,7 @@ inline uint8_t get_current_task_id() {
       task_handles[handle] = task_handle_counter;
       reverse_task_handles[task_handle_counter] = handle;
       res = task_handle_counter;
-    ENTER_CRITICAL_WRITE(&task_handle_mutex);
+    EXIT_CRITICAL_WRITE(&task_handle_mutex);
   }
   return res;
 }
@@ -173,7 +193,7 @@ inline void advance_pointers(uint8_t type_size, size_t* out_entry_idx) {
   EXIT_CRITICAL(&profiler_index_mutex);
 }
 
-inline void insert_link_event(uint32_t link, uint8_t link_type, uint64_t time_stamp, uint8_t cpu_id, uint8_t task_id) {
+inline void insert_link_event(uint16_t link, uint8_t link_type, uint64_t time_stamp, uint8_t cpu_id, uint8_t task_id) {
   if(!profiler_entries)
     return;
   size_t type_size = sizeof(link_entry_t);
@@ -198,16 +218,23 @@ void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* ou
   EXIT_CRITICAL(&profiler_index_mutex);
 }
 
-void profiler_get_task_handles(void* output_taskhandle_16) {
+size_t get_num_task_handles() {
+  return task_handles.size();
+}
+
+void profiler_get_task_handles(TaskHandle_t* output_taskhandle) {
   // memcpy(output_taskhandle_16, task_handles, sizeof(TaskHandle_t) * 16);
-  // TODO
+  output_taskhandle[0] = 0;
+  for(int i=1; i < task_handles.size(); i++) {
+    output_taskhandle[i] = reverse_task_handles[i];
+  }
 }
 
 profiler_duration_handle_t trace_begin(const char* name, uint8_t color) {
   return trace_begin_linked(name, 0, nullptr, color);
 }
 
-profiler_duration_handle_t trace_begin_linked(const char* name, uint32_t link_in, uint32_t* link_out, uint8_t color) {
+profiler_duration_handle_t trace_begin_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color) {
   profiler_duration_handle_t result;
   if(!profiler_entries)
     return result;
@@ -279,7 +306,7 @@ void trace_instant(const char* name, uint8_t color) {
   trace_instant_linked(name, 0, nullptr, color);
 }
 
-void trace_instant_linked(const char* name, uint32_t link_in, uint32_t* link_out, uint8_t color) {
+void trace_instant_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color) {
   if(!profiler_entries)
     return;
   uint8_t task_id = get_current_task_id();
