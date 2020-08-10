@@ -29,33 +29,33 @@ static uint8_t type_sizes[8];
 static size_t buffer_size_in_bytes;
 static std::chrono::high_resolution_clock::time_point start_time;
 
-void ENTER_CRITICAL(std::mutex* mutex) {
+inline void ENTER_CRITICAL(std::mutex* mutex) {
     mutex->lock();
 }
-void EXIT_CRITICAL(std::mutex* mutex) {
+inline void EXIT_CRITICAL(std::mutex* mutex) {
     mutex->unlock();
 }
-void ENTER_CRITICAL(std::shared_mutex* mutex) {
+inline void ENTER_CRITICAL(std::shared_mutex* mutex) {
     mutex->lock();
 }
-void EXIT_CRITICAL(std::shared_mutex* mutex) {
+inline void EXIT_CRITICAL(std::shared_mutex* mutex) {
     mutex->unlock();
 }
 
-void ENTER_CRITICAL_WRITE(std::shared_mutex* mutex) {
+inline void ENTER_CRITICAL_WRITE(std::shared_mutex* mutex) {
     mutex->lock();
 }
-void EXIT_CRITICAL_WRITE(std::shared_mutex* mutex) {
+inline void EXIT_CRITICAL_WRITE(std::shared_mutex* mutex) {
     mutex->unlock();
 }
-void ENTER_CRITICAL_READ(std::shared_mutex* mutex) {
+inline void ENTER_CRITICAL_READ(std::shared_mutex* mutex) {
     mutex->lock_shared();
 }
-void EXIT_CRITICAL_READ(std::shared_mutex* mutex) {
+inline void EXIT_CRITICAL_READ(std::shared_mutex* mutex) {
     mutex->unlock_shared();
 }
 
-void profiler_init() {
+inline void profiler_init() {
   profiler_init_with_size(PROFILER_BUFFER_SIZE_IN_BYTES);
 }
 
@@ -80,7 +80,7 @@ void profiler_init_with_size(size_t ring_buffer_size_in_bytes) {
 }
 
 size_t get_smallest_type_size() {
-  assert(("Profiler has not been initialized", proffiler_entries));
+  assert(("Profiler has not been initialized", profiler_entries));
   size_t min_size = 1000;
   for(int i=0; i<sizeof(type_sizes); i++) {
     size_t size = type_sizes[i];
