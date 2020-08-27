@@ -80,34 +80,4 @@ typedef struct {
   uint32_t time_stamp_begin_microseconds;
 } __attribute__((packed)) link_entry_t;
 
-typedef struct {
-  // Type of event. Based on this type, different fields from the union part are valid.
-  uint8_t type;
-  // ID of CPU from which event was traced.
-  uint8_t cpu_id;
-  // One of a few predefined color values.
-  uint8_t color;
-  // Flow Event id's to visualize links between events.
-  uint16_t link_in;
-  uint16_t link_out;
-  // FreeRTOS task handle. NULL if called from interrupt.
-  void* task_handle;
-  // Name of the event.
-  const char* name;
-  // Start of event start in microseconds since device started.
-  uint32_t time_stamp_begin_microseconds;
-  union {
-    struct {
-	  // EVENT_TYPE_DURATION additional fields.
-	  // Duration of event in microseconds.
-      uint32_t time_duration_microseconds;
-    };
-    struct {
-	  // EVENT_TYPE_COUNTER additional fields.
-	  // Value of the counter to keep track of.
-      int32_t counter_value;
-    };
-  };
-} profiler_entry_t;
-
 #endif  // __MABUTRACE_ESP32_H__

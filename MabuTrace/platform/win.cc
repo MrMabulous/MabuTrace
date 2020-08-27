@@ -27,7 +27,8 @@ static std::unordered_map<TaskHandle_t, uint8_t> task_handles;
 static std::unordered_map<uint8_t, TaskHandle_t> reverse_task_handles;
 static uint8_t type_sizes[8];
 static size_t buffer_size_in_bytes;
-static std::chrono::high_resolution_clock::time_point start_time;
+static LARGE_INTEGER start_time;
+static LARGE_INTEGER performance_counter_frequency;
 
 inline void ENTER_CRITICAL(std::mutex* mutex) {
     mutex->lock();
@@ -60,7 +61,8 @@ inline void profiler_init() {
 }
 
 void profiler_init_with_size(size_t ring_buffer_size_in_bytes) {
-  start_time = std::chrono::high_resolution_clock::now();
+  QueryPerformanceCounter(&start_time);
+  QueryPerformanceFrequency(&performance_counter_frequency); 
   buffer_size_in_bytes = ring_buffer_size_in_bytes;
   if(profiler_entries)
     return;
@@ -121,8 +123,12 @@ inline TaskHandle_t get_task_handle_from_id(uint8_t id) {
 }
 
 inline uint64_t now_in_microseconds() {
-    auto elapsed = std::chrono::high_resolution_clock::now() - start_time;
-    return std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+    LARGE_INTEGER now, elapsed_micro_seconds;
+    QueryPerformanceCounter(&now);
+    elapsed_micro_seconds.QuadPart = now.QuadPart - start_time.QuadPart;
+    elapsed_micro_seconds.QuadPart *= 1000000;
+    elapsed_micro_seconds.QuadPart /= performance_counter_frequency.QuadPart;
+    return static_cast<uint64_t>(elapsed_micro_seconds.QuadPart);
 }
 
 inline uint8_t get_current_task_id() {
