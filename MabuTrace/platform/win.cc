@@ -93,7 +93,7 @@ size_t get_smallest_type_size() {
 }
 
 size_t get_timestamp_frequency() {
-  return performance_counter_frequency.QuadPart;
+  return static_cast<size_t>(performance_counter_frequency.QuadPart);
 }
 
 void profiler_deinit() {
