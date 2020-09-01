@@ -39,11 +39,13 @@ std::string get_json_trace() {
                                    "  ],\n"
                                    "  \"displayTimeUnit\": \"ms\",\n"
                                    "  \"otherData\": {\n"
-                                   "    \"version\": \"ESP32 Profiler v1.0\"\n"
+                                   "    \"version\": \"Mabutrace Profiler v1.0\"\n"
+                                   "    \"timer_freq:\": %lu\n"
+                                   "    \"digits\": %d\n"
                                    "  }\n"
                                    "}";
 
-  static const size_t header_and_footer_bytes = 128; // rounded up
+  static const size_t header_and_footer_bytes = 256; // rounded up
 
   // compute conservative buffer size.
   size_t min_type_size = get_smallest_type_size();
@@ -128,7 +130,7 @@ std::string get_json_trace() {
     }
   } while (idx != end_idx && loopCount <= 1);
 
-  lineLength = sprintf(chunk + ofst, "%s", json_footer);
+  lineLength = sprintf(chunk + ofst, json_footer, (unsigned long)timestamp_frequency, number_of_digits);
 
   std::string result(json_buffer);
   delete[] json_buffer;
