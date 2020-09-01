@@ -126,7 +126,7 @@ inline TaskHandle_t get_task_handle_from_id(uint8_t id) {
   return result;
 }
 
-inline uint64_t now() {
+inline uint64_t get_now() {
     LARGE_INTEGER right_now, elapsed;
     QueryPerformanceCounter(&right_now);
     elapsed.QuadPart = right_now.QuadPart - start_time.QuadPart;
@@ -246,7 +246,7 @@ profiler_duration_handle_t trace_begin_linked(const char* name, uint16_t link_in
   profiler_duration_handle_t result;
   if(!profiler_entries)
     return result;
-  result.time_stamp_begin = now();
+  result.time_stamp_begin = get_now();
   result.name = name;
   result.link_in = link_in;
   result.color = color;
@@ -272,7 +272,7 @@ void trace_end(profiler_duration_handle_t* handle) {
     return;
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = get_cpu_id();
-  uint64_t now = now();
+  uint64_t now = get_now();
   size_t type_size = 0;
   if (handle->color == 0) {
     type_size = sizeof(duration_entry_t);
@@ -319,7 +319,7 @@ void trace_instant_linked(const char* name, uint16_t link_in, uint16_t* link_out
     return;
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = get_cpu_id();
-  uint64_t now = now();
+  uint64_t now = get_now();
   size_t type_size = sizeof(instant_colored_entry_t);
 
   size_t entry_idx = 0;
@@ -355,7 +355,7 @@ void trace_counter(const char* name, int32_t value, uint8_t color) {
     return;
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = get_cpu_id();
-  uint64_t now = now();
+  uint64_t now = get_now();
   size_t type_size = sizeof(counter_entry_t);
 
   size_t entry_idx = 0;
