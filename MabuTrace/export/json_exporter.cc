@@ -37,7 +37,7 @@ std::string get_json_trace() {
                                    "  \"traceEvents\": [\n";
   static const char* json_footer = "    {}\n"
                                    "  ],\n"
-                                   "  \"displayTimeUnit\": \"ms\",\n"
+                                   "  \"displayTimeUnit\": \"ns\",\n"
                                    "  \"otherData\": {\n"
                                    "    \"version\": \"ESP32 Profiler v1.0\"\n"
                                    "  }\n"
