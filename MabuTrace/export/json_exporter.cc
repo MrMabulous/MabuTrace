@@ -48,7 +48,7 @@ std::string get_json_trace() {
   size_t min_type_size = get_smallest_type_size();
   size_t max_number_elements = profiler_buffer_size / min_type_size;
   size_t json_buffer_size = header_and_footer_bytes + max_number_elements * MAX_CHARS_PER_ENTRY;
-  double timestamp_frequency_mult = 1.0/get_timestamp_frequency();
+  double timestamp_frequency_mult = 1000000.0/get_timestamp_frequency();  // multiplier to convert to microsecond fractionals.
 
   char* json_buffer = new char[json_buffer_size];
 
