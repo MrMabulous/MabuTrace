@@ -92,6 +92,10 @@ size_t get_smallest_type_size() {
   return min_size;
 }
 
+size_t get_timestamp_frequency() {
+  return performance_counter_frequency.QuadPart;
+}
+
 void profiler_deinit() {
   if(!profiler_entries)
     return;
@@ -122,13 +126,11 @@ inline TaskHandle_t get_task_handle_from_id(uint8_t id) {
   return result;
 }
 
-inline uint64_t now_in_microseconds() {
-    LARGE_INTEGER now, elapsed_micro_seconds;
-    QueryPerformanceCounter(&now);
-    elapsed_micro_seconds.QuadPart = now.QuadPart - start_time.QuadPart;
-    elapsed_micro_seconds.QuadPart *= 1000000;
-    elapsed_micro_seconds.QuadPart /= performance_counter_frequency.QuadPart;
-    return static_cast<uint64_t>(elapsed_micro_seconds.QuadPart);
+inline uint64_t now() {
+    LARGE_INTEGER right_now, elapsed;
+    QueryPerformanceCounter(&right_now);
+    elapsed.QuadPart = right_now.QuadPart - start_time.QuadPart;
+    return static_cast<uint64_t>(elapsed.QuadPart);
 }
 
 inline uint8_t get_current_task_id() {
@@ -209,7 +211,7 @@ inline void insert_link_event(uint16_t link, uint8_t link_type, uint64_t time_st
   entry->header.type = EVENT_TYPE_LINK;
   entry->header.cpu_id = cpu_id;
   entry->header.task_id = task_id;
-  entry->time_stamp_begin_microseconds = time_stamp;
+  entry->time_stamp_begin = time_stamp;
   entry->link = link;
   entry->link_type = link_type;
 }
@@ -244,7 +246,7 @@ profiler_duration_handle_t trace_begin_linked(const char* name, uint16_t link_in
   profiler_duration_handle_t result;
   if(!profiler_entries)
     return result;
-  result.time_stamp_begin_microseconds = now_in_microseconds();
+  result.time_stamp_begin = now();
   result.name = name;
   result.link_in = link_in;
   result.color = color;
@@ -270,7 +272,7 @@ void trace_end(profiler_duration_handle_t* handle) {
     return;
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = get_cpu_id();
-  uint64_t now = now_in_microseconds();
+  uint64_t now = now();
   size_t type_size = 0;
   if (handle->color == 0) {
     type_size = sizeof(duration_entry_t);
@@ -281,30 +283,30 @@ void trace_end(profiler_duration_handle_t* handle) {
   size_t entry_idx = 0;
   advance_pointers(type_size, &entry_idx);
   
-  uint64_t duration = now - handle->time_stamp_begin_microseconds;
+  uint64_t duration = now - handle->time_stamp_begin;
   if (handle->color == 0) {
     duration_entry_t* entry = (duration_entry_t*)(profiler_entries + entry_idx);
     entry->header.type = EVENT_TYPE_DURATION;
     entry->header.cpu_id = cpu_id;
     entry->header.task_id = task_id;
-    entry->time_stamp_begin_microseconds = handle->time_stamp_begin_microseconds;
-    entry->time_duration_microseconds = duration;
+    entry->time_stamp_begin = handle->time_stamp_begin;
+    entry->time_duration = duration;
     entry->name = handle->name;
   } else {
     duration_colored_entry_t* entry = (duration_colored_entry_t*)(profiler_entries + entry_idx);
     entry->header.type = EVENT_TYPE_DURATION_COLORED;
     entry->header.cpu_id = cpu_id;
     entry->header.task_id = task_id;
-    entry->time_stamp_begin_microseconds = handle->time_stamp_begin_microseconds;
-    entry->time_duration_microseconds = duration;
+    entry->time_stamp_begin = handle->time_stamp_begin;
+    entry->time_duration = duration;
     entry->name = handle->name;
     entry->color = handle->color;
   }
   if (handle->link_in) {
-    insert_link_event(handle->link_in, LINK_TYPE_IN, handle->time_stamp_begin_microseconds-1, cpu_id, task_id);
+    insert_link_event(handle->link_in, LINK_TYPE_IN, handle->time_stamp_begin-1, cpu_id, task_id);
   }
   if (handle->link_out) {
-    insert_link_event(handle->link_out, LINK_TYPE_OUT, handle->time_stamp_begin_microseconds + duration - 1, cpu_id, task_id);
+    insert_link_event(handle->link_out, LINK_TYPE_OUT, handle->time_stamp_begin + duration - 1, cpu_id, task_id);
   }
 }
 
@@ -317,7 +319,7 @@ void trace_instant_linked(const char* name, uint16_t link_in, uint16_t* link_out
     return;
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = get_cpu_id();
-  uint64_t now = now_in_microseconds();
+  uint64_t now = now();
   size_t type_size = sizeof(instant_colored_entry_t);
 
   size_t entry_idx = 0;
@@ -327,7 +329,7 @@ void trace_instant_linked(const char* name, uint16_t link_in, uint16_t* link_out
   entry->header.type = EVENT_TYPE_INSTANT_COLORED;
   entry->header.cpu_id = cpu_id;
   entry->header.task_id = task_id;
-  entry->time_stamp_begin_microseconds = now;
+  entry->time_stamp_begin = now;
   entry->name = name;
   entry->color = color;
 
@@ -353,7 +355,7 @@ void trace_counter(const char* name, int32_t value, uint8_t color) {
     return;
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = get_cpu_id();
-  uint64_t now = now_in_microseconds();
+  uint64_t now = now();
   size_t type_size = sizeof(counter_entry_t);
 
   size_t entry_idx = 0;
@@ -363,7 +365,7 @@ void trace_counter(const char* name, int32_t value, uint8_t color) {
   entry->header.type = EVENT_TYPE_COUNTER;
   entry->header.cpu_id = cpu_id;
   entry->header.task_id = task_id;
-  entry->time_stamp_begin_microseconds = now;
+  entry->time_stamp_begin = now;
   entry->name = name;
   entry->value = value;
 }

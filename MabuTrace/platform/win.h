@@ -2,7 +2,7 @@
 #define __MABUTRACE_WIN_H__
 
 typedef struct {
-  uint64_t time_stamp_begin_microseconds;
+  uint64_t time_stamp_begin;
   const char* name;
   uint16_t link_in;
   uint16_t link_out;
@@ -27,10 +27,10 @@ typedef struct {
 #pragma pack(push,1)
 typedef struct {
   entry_header_t header;
-  // Duration of event in microseconds. 32bit yields up to 70 minutes duration.
-  uint32_t time_duration_microseconds;
-  // Start of event start in microseconds since device started.
-  uint64_t time_stamp_begin_microseconds;
+  // Duration of event.
+  uint64_t time_duration;
+  // Start of event.
+  uint64_t time_stamp_begin;
   // Name of the event.
   const char* name;
 } duration_entry_t;
@@ -41,10 +41,10 @@ typedef struct {
 typedef struct {
   entry_header_t header;
   uint8_t color;
-  // Duration of event in microseconds.
-  uint32_t time_duration_microseconds;
-  // Start of event start in microseconds since device started.
-  uint64_t time_stamp_begin_microseconds;
+  // Duration of event.
+  uint64_t time_duration;
+  // Start of event.
+  uint64_t time_stamp_begin;
   // Name of the event.
   const char* name;
 } duration_colored_entry_t;
@@ -55,8 +55,8 @@ typedef struct {
 typedef struct {
   entry_header_t header;
   uint8_t color;
-  // Start of event start in microseconds since device started.
-  uint64_t time_stamp_begin_microseconds;
+  // Start of event.
+  uint64_t time_stamp_begin;
   // Name of the event.
   const char* name;
 } instant_colored_entry_t;
@@ -68,8 +68,8 @@ typedef struct {
   entry_header_t header;
   // 32 bits allows for values between -2,147,483,648 and +2,147,483,647
   int32_t value;
-  // Start of event start in microseconds since device started.
-  uint64_t time_stamp_begin_microseconds;
+  // Start of event.
+  uint64_t time_stamp_begin;
   // Name of the event.
   const char* name;
 }  counter_entry_t;
@@ -83,8 +83,8 @@ typedef struct {
   uint8_t link_type;
   // Link id
   uint16_t link;
-  // Start of event start in microseconds since device started.
-  uint64_t time_stamp_begin_microseconds;
+  // Start of event.
+  uint64_t time_stamp_begin;
 } link_entry_t;
 #pragma pack(pop)
 

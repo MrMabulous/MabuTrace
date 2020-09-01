@@ -48,6 +48,7 @@ std::string get_json_trace() {
   size_t min_type_size = get_smallest_type_size();
   size_t max_number_elements = profiler_buffer_size / min_type_size;
   size_t json_buffer_size = header_and_footer_bytes + max_number_elements * MAX_CHARS_PER_ENTRY;
+  double timestamp_frequency_mult = 1.0/get_timestamp_frequency();
 
   char* json_buffer = new char[json_buffer_size];
 
@@ -73,37 +74,37 @@ std::string get_json_trace() {
       case EVENT_TYPE_DURATION: {
         duration_entry_t* entry = (duration_entry_t*)entry_header;
         entry_size = sizeof(duration_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"X\",\"pid\":0,\"tid\":\"%s\",\"ts\":%llu,\"dur\":%llu,\"args\":{\"cpu\":%d}},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (unsigned long long int)entry->time_duration_microseconds, (int)entry_header->cpu_id);
+        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"X\",\"pid\":0,\"tid\":\"%s\",\"ts\":%f,\"dur\":%f,\"args\":{\"cpu\":%d}},\n",
+                             entry->name, threadName, entry->time_stamp_begin * timestamp_frequency_mult, entry->time_duration * timestamp_frequency_mult, (int)entry_header->cpu_id);
         break;
       }
       case EVENT_TYPE_DURATION_COLORED: {
         duration_colored_entry_t* entry = (duration_colored_entry_t*)entry_header;
         entry_size = sizeof(duration_colored_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"X\",\"pid\":0,\"tid\":\"%s\",\"ts\":%llu,\"dur\":%llu,\"args\":{\"cpu\":%d}%s},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (unsigned long long int)entry->time_duration_microseconds, (int)entry_header->cpu_id, colorNameLookup[entry->color]);
+        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"X\",\"pid\":0,\"tid\":\"%s\",\"ts\":%f,\"dur\":%f,\"args\":{\"cpu\":%d}%s},\n",
+                             entry->name, threadName, entry->time_stamp_begin * timestamp_frequency_mult, entry->time_duration * timestamp_frequency_mult, (int)entry_header->cpu_id, colorNameLookup[entry->color]);
         break;
       }
       case EVENT_TYPE_INSTANT_COLORED: {
         instant_colored_entry_t* entry = (instant_colored_entry_t*)entry_header;
         entry_size = sizeof(instant_colored_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"i\",\"pid\":0,\"tid\":\"%s\",\"ts\":%llu,\"s\":\"p\",\"args\":{\"cpu\":%d}%s},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (int)entry_header->cpu_id, colorNameLookup[entry->color]);
+        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"i\",\"pid\":0,\"tid\":\"%s\",\"ts\":%f,\"s\":\"p\",\"args\":{\"cpu\":%d}%s},\n",
+                             entry->name, threadName, entry->time_stamp_begin * timestamp_frequency_mult, (int)entry_header->cpu_id, colorNameLookup[entry->color]);
         break;
       }
       case EVENT_TYPE_COUNTER: {
         counter_entry_t* entry = (counter_entry_t*)entry_header;
         entry_size = sizeof(counter_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"C\",\"pid\":0,\"tid\":\"%s\",\"ts\":%llu,\"args\":{\"value\":%d}},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (int)entry->value);
+        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"C\",\"pid\":0,\"tid\":\"%s\",\"ts\":%f,\"args\":{\"value\":%d}},\n",
+                             entry->name, threadName, entry->time_stamp_begin * timestamp_frequency_mult, (int)entry->value);
         break;
       }
       case EVENT_TYPE_LINK: {
         link_entry_t* entry = (link_entry_t*)entry_header;
         entry_size = sizeof(link_entry_t);
         char phase = (entry->link_type == LINK_TYPE_IN) ? 'f' : 's';
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"flow\",\"cat\":\"flow\",\"id\":%u,\"ph\":\"%c\",\"pid\":0,\"tid\":\"%s\",\"ts\":%llu},\n",
-                            (unsigned int)entry->link, phase, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds); 
+        lineLength = sprintf(chunk + ofst, "    {\"name\":\"flow\",\"cat\":\"flow\",\"id\":%u,\"ph\":\"%c\",\"pid\":0,\"tid\":\"%s\",\"ts\":%f},\n",
+                            (unsigned int)entry->link, phase, threadName, entry->time_stamp_begin * timestamp_frequency_mult); 
         break;
       }
       case EVENT_TYPE_NONE:

@@ -60,6 +60,10 @@ size_t get_smallest_type_size() {
   return min_size;
 }
 
+size_t get_timestamp_frequency() {
+  return 1000000; // microseconds.
+}
+
 size_t get_smallest_type_size() {
   assert(("Profiler has not been initialized", proffiler_entries));
   size_t min_size = 1000;
@@ -170,7 +174,7 @@ inline void IRAM_ATTR insert_link_event(uint16_t link, uint8_t link_type, uint64
   entry->header.type = EVENT_TYPE_LINK;
   entry->header.cpu_id = cpu_id;
   entry->header.task_id = task_id;
-  entry->time_stamp_begin_microseconds = (uint32_t)time_stamp;
+  entry->time_stamp_begin = (uint32_t)time_stamp;
   entry->link = link;
   entry->link_type = link_type;
 }
@@ -201,7 +205,7 @@ profiler_duration_handle_t IRAM_ATTR trace_begin_linked(const char* name, uint16
   profiler_duration_handle_t result;
   if(!profiler_entries)
     return result;
-  result.time_stamp_begin_microseconds = esp_timer_get_time();
+  result.time_stamp_begin = esp_timer_get_time();
   result.name = name;
   result.link_in = link_in;
   result.color = color;
@@ -238,30 +242,30 @@ void IRAM_ATTR trace_end(profiler_duration_handle_t* handle) {
   size_t entry_idx = 0;
   advance_pointers(type_size, &entry_idx);
   
-  uint64_t duration = now - handle->time_stamp_begin_microseconds;
+  uint64_t duration = now - handle->time_stamp_begin;
   if (handle->color == 0) {
     duration_entry_t* entry = (duration_entry_t*)(profiler_entries + entry_idx);
     entry->header.type = EVENT_TYPE_DURATION;
     entry->header.cpu_id = cpu_id;
     entry->header.task_id = task_id;
-    entry->time_stamp_begin_microseconds = (uint32_t)handle->time_stamp_begin_microseconds;
-    entry->time_duration_microseconds = duration;
+    entry->time_stamp_begin = (uint32_t)handle->time_stamp_begin;
+    entry->time_duration = duration;
     entry->name = handle->name;
   } else {
     duration_colored_entry_t* entry = (duration_colored_entry_t*)(profiler_entries + entry_idx);
     entry->header.type = EVENT_TYPE_DURATION_COLORED;
     entry->header.cpu_id = cpu_id;
     entry->header.task_id = task_id;
-    entry->time_stamp_begin_microseconds = (uint32_t)handle->time_stamp_begin_microseconds;
-    entry->time_duration_microseconds = duration;
+    entry->time_stamp_begin = (uint32_t)handle->time_stamp_begin;
+    entry->time_duration = duration;
     entry->name = handle->name;
     entry->color = handle->color;
   }
   if (handle->link_in) {
-    insert_link_event(handle->link_in, LINK_TYPE_IN, handle->time_stamp_begin_microseconds-1, cpu_id, task_id);
+    insert_link_event(handle->link_in, LINK_TYPE_IN, handle->time_stamp_begin-1, cpu_id, task_id);
   }
   if (handle->link_out) {
-    insert_link_event(handle->link_out, LINK_TYPE_OUT, handle->time_stamp_begin_microseconds + duration - 1, cpu_id, task_id);
+    insert_link_event(handle->link_out, LINK_TYPE_OUT, handle->time_stamp_begin + duration - 1, cpu_id, task_id);
   }
 }
 
@@ -284,7 +288,7 @@ void IRAM_ATTR trace_instant_linked(const char* name, uint16_t link_in, uint16_t
   entry->header.type = EVENT_TYPE_INSTANT_COLORED;
   entry->header.cpu_id = cpu_id;
   entry->header.task_id = task_id;
-  entry->time_stamp_begin_microseconds = (uint32_t)now;
+  entry->time_stamp_begin = (uint32_t)now;
   entry->name = name;
   entry->color = color;
 
@@ -320,7 +324,7 @@ void IRAM_ATTR trace_counter(const char* name, int32_t value, uint8_t color) {
   entry->header.type = EVENT_TYPE_COUNTER;
   entry->header.cpu_id = cpu_id;
   entry->header.task_id = task_id;
-  entry->time_stamp_begin_microseconds = (uint32_t)now;
+  entry->time_stamp_begin = (uint32_t)now;
   entry->name = name;
   entry->value = value;
 }

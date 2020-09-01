@@ -8,7 +8,7 @@
 #define PROFILER_BUFFER_SIZE_IN_BYTES 65536 // 64kb
 
 typedef struct {
-  uint64_t time_stamp_begin_microseconds;
+  uint64_t time_stamp_begin;
   const char* name;
   uint16_t link_in;
   uint16_t link_out;
@@ -29,9 +29,9 @@ typedef struct {
 typedef struct {
   entry_header_t header;
   // Duration of event in microseconds. 24bit yields up to 16 seconds duration.
-  unsigned int time_duration_microseconds : 24;
+  unsigned int time_duration : 24;
   // Start of event start in microseconds since device started. 32bit overflows every 70 minutes.
-  uint32_t time_stamp_begin_microseconds;
+  uint32_t time_stamp_begin;
   // Name of the event.
   const char* name;
 } __attribute__((packed)) duration_entry_t;
@@ -41,9 +41,9 @@ typedef struct {
   entry_header_t header;
   uint8_t color;
   // Duration of event in microseconds.
-  uint32_t time_duration_microseconds;
+  uint32_t time_duration;
   // Start of event start in microseconds since device started. 32bit overflows every 70 minutes.
-  uint32_t time_stamp_begin_microseconds;
+  uint32_t time_stamp_begin;
   // Name of the event.
   const char* name;
 } __attribute__((packed)) duration_colored_entry_t;
@@ -53,7 +53,7 @@ typedef struct {
   entry_header_t header;
   uint8_t color;
   // Start of event start in microseconds since device started. 32bit overflows every 70 minutes.
-  uint32_t time_stamp_begin_microseconds;
+  uint32_t time_stamp_begin;
   // Name of the event.
   const char* name;
 } __attribute__((packed)) instant_colored_entry_t;
@@ -64,7 +64,7 @@ typedef struct {
   // 24 bits allows for values between -8388608 and 8388607
   signed int value : 24;
   // Start of event start in microseconds since device started. 32bit overflows every 70 minutes.
-  uint32_t time_stamp_begin_microseconds;
+  uint32_t time_stamp_begin;
   // Name of the event.
   const char* name;
 } __attribute__((packed)) counter_entry_t;
@@ -77,7 +77,7 @@ typedef struct {
   // Link id
   uint16_t link;
   // Start of event start in microseconds since device started. 32bit overflows every 70 minutes.
-  uint32_t time_stamp_begin_microseconds;
+  uint32_t time_stamp_begin;
 } __attribute__((packed)) link_entry_t;
 
 #endif  // __MABUTRACE_ESP32_H__

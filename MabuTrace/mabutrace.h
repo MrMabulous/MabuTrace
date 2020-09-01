@@ -80,6 +80,7 @@ void profiler_init_with_size(size_t ring_buffer_size_in_bytes);
 void profiler_deinit();
 size_t get_smallest_type_size();
 size_t get_buffer_size();
+size_t get_timestamp_frequency(); // return number of timestamp increments per second.
 void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* out_end_idx);
 profiler_duration_handle_t trace_begin(const char* name, uint8_t color);
 profiler_duration_handle_t trace_begin_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color);
