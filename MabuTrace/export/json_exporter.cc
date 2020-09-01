@@ -40,8 +40,8 @@ std::string get_json_trace() {
                                    "  ],\n"
                                    "  \"displayTimeUnit\": \"ms\",\n"
                                    "  \"otherData\": {\n"
-                                   "    \"version\": \"Mabutrace Profiler v1.0\"\n"
-                                   "    \"timer_freq:\": %lu\n"
+                                   "    \"version\": \"Mabutrace Profiler v1.0\",\n"
+                                   "    \"timer_freq:\": %lu,\n"
                                    "    \"digits\": %d\n"
                                    "  }\n"
                                    "}";
