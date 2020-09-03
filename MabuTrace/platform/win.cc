@@ -20,7 +20,6 @@ static size_t entries_next_index = 0;
 static std::mutex profiler_index_mutex;
 static uint16_t link_index = 0;
 static std::mutex link_index_mutex;
-//static TaskHandle_t task_handles[16];
 static std::shared_mutex task_handle_mutex;
 static uint8_t task_handle_counter = 0;
 static std::unordered_map<TaskHandle_t, uint8_t> task_handles;
@@ -61,6 +60,8 @@ inline void profiler_init() {
 }
 
 void profiler_init_with_size(size_t ring_buffer_size_in_bytes) {
+  task_handles.reserve(8192);
+  reverse_task_handles.reserve(8192);
   QueryPerformanceCounter(&start_time);
   QueryPerformanceFrequency(&performance_counter_frequency); 
   buffer_size_in_bytes = ring_buffer_size_in_bytes;
