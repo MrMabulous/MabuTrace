@@ -1,5 +1,6 @@
 #include "../mabutrace.h"
 
+#include <atomic>
 #include <assert.h>
 #include <windows.h>
 #include <processthreadsapi.h>
@@ -23,7 +24,8 @@ static std::mutex link_index_mutex;
 static std::shared_mutex task_handle_mutex;
 static uint8_t task_handle_counter = 0;
 static std::unordered_map<TaskHandle_t, uint8_t> task_handles;
-static std::unordered_map<uint8_t, TaskHandle_t> reverse_task_handles;
+static TaskHandle_t reverse_task_handles[MAX_THREAD_ID + 1];
+static std::atomic<TaskHandle_t> critical_write_current_task_handle = 0;
 static uint8_t type_sizes[8];
 static size_t buffer_size_in_bytes;
 static LARGE_INTEGER start_time;
@@ -60,8 +62,8 @@ inline void profiler_init() {
 }
 
 void profiler_init_with_size(size_t ring_buffer_size_in_bytes) {
-  task_handles.reserve(8192);
-  reverse_task_handles.reserve(8192);
+  task_handles.reserve(MAX_THREAD_ID);
+  memset(reverse_task_handles, 0, sizeof(reverse_task_handles));
   QueryPerformanceCounter(&start_time);
   QueryPerformanceFrequency(&performance_counter_frequency); 
   buffer_size_in_bytes = ring_buffer_size_in_bytes;
@@ -138,6 +140,12 @@ inline uint8_t get_current_task_id() {
   TaskHandle_t handle = get_current_task_handle();
   if (!handle) {
     return 0;
+  } else if (handle == critical_write_current_task_handle) {
+	// This can only happen if the assertion in the critical section below
+	// or the insertion into task_handles causes the thread to re-enter here
+	// in which case the thread would deadlock. But since at this point
+	// task_handle_counter contains the correct value, it can be returned.
+	return task_handle_counter;
   }
   uint8_t res;
   ENTER_CRITICAL_READ(&task_handle_mutex);
@@ -148,11 +156,13 @@ inline uint8_t get_current_task_id() {
   } else {
     EXIT_CRITICAL_READ(&task_handle_mutex);
     ENTER_CRITICAL_WRITE(&task_handle_mutex);
-      assert(("Too many different threads.", task_handle_counter < MAX_THREAD_ID));
       task_handle_counter++;
+	  critical_write_current_task_handle = handle;
+	  assert(("Too many different threads.", task_handle_counter= < MAX_THREAD_ID));
       task_handles[handle] = task_handle_counter;
       reverse_task_handles[task_handle_counter] = handle;
       res = task_handle_counter;
+	  critical_write_current_task_handle = 0;
     EXIT_CRITICAL_WRITE(&task_handle_mutex);
   }
   return res;
