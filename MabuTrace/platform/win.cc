@@ -157,12 +157,12 @@ inline uint8_t get_current_task_id() {
     EXIT_CRITICAL_READ(&task_handle_mutex);
     ENTER_CRITICAL_WRITE(&task_handle_mutex);
       task_handle_counter++;
-	  critical_write_current_task_handle = handle;
-	  assert(("Too many different threads.", task_handle_counter= < MAX_THREAD_ID));
+	    critical_write_current_task_handle = handle;
+	    assert(("Too many different threads.", task_handle_counter <= MAX_THREAD_ID));
       task_handles[handle] = task_handle_counter;
       reverse_task_handles[task_handle_counter] = handle;
       res = task_handle_counter;
-	  critical_write_current_task_handle = 0;
+	    critical_write_current_task_handle = 0;
     EXIT_CRITICAL_WRITE(&task_handle_mutex);
   }
   return res;
