@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "esp_timer.h"
+#include "rom/ets_sys.h"
 
 #define configUSE_TRACE_FACILITY 1
 #define traceTASK_DELAY_UNTIL() TRACE_SCOPE("vTaskDelayUntil")
@@ -45,7 +46,7 @@ void profiler_init() {
 }
 
 size_t get_smallest_type_size() {
-  assert(("Profiler has not been initialized", proffiler_entries));
+  assert(profiler_entries && "Profiler has not been initialized");
   size_t min_size = 1000;
   for(int i=0; i<sizeof(type_sizes); i++) {
     size_t size = type_sizes[i];

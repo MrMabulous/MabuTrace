@@ -1,57 +1,60 @@
-#include "../mabutrace.h"
+#include "mabutrace_export.h"
+#include "mabutrace.h"
 
 #include <assert.h>
-#include <fstream>
-#include <string>
-#include <iostream>
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 // An upper bound estimate for the number of chars required for the json output of each entry
 #define MAX_CHARS_PER_ENTRY 256
 
-std::string get_json_trace() {
-  char* profilerEntries;
+static const char* json_header = "{\n"
+                                  "  \"traceEvents\": [\n";
+static const char* json_footer = "    {}\n"
+                                  "  ],\n"
+                                  "  \"displayTimeUnit\": \"ms\",\n"
+                                  "  \"otherData\": {\n"
+                                  "    \"version\": \"ESP32 Profiler v1.0\"\n"
+                                  "  }\n"
+                                  "}";
+
+static const size_t header_and_footer_bytes = 128; // rounded up
+
+static const char* colorNameLookup[] = {
+  "",                                        // COLOR_UNDEFINED
+  ",\"cname\":\"good\"",                     // COLOR_GREEN
+  ",\"cname\":\"vsync_highlight_color\"",    // COLOR_LIGHT_GREEN
+  ",\"cname\":\"bad\"",                      // COLOR_DARK_ORANGE
+  ",\"cname\":\"terrible\"",                 // COLOR_DARK_RED
+  ",\"cname\":\"yellow\"",                   // COLOR_YELLOW
+  ",\"cname\":\"olive\"",                    // COLOR_OLIVE
+  ",\"cname\":\"black\"",                    // COLOR_BLACK
+  ",\"cname\":\"white\"",                    // COLOR_WHITE
+  ",\"cname\":\"generic_work\"",             // COLOR_GRAY
+  ",\"cname\":\"grey\""                      // COLOR_LIGHT_GRAY
+};
+
+size_t get_json_size() {
+  // compute conservative buffer size.
+  size_t min_type_size = get_smallest_type_size();
+  size_t max_number_elements = get_buffer_size() / min_type_size;
+  size_t json_buffer_size = header_and_footer_bytes + max_number_elements * MAX_CHARS_PER_ENTRY;
+  return json_buffer_size;
+}
+
+void get_json_trace(char* json_buffer, size_t json_buffer_size) {
+  assert(json_buffer_size >= get_json_size() && "Buffer too small.");
+  char* profiler_entries;
   size_t profiler_buffer_size = get_buffer_size();
-  profilerEntries = new char[profiler_buffer_size];
+  profiler_entries = (char*)malloc(profiler_buffer_size);
 
   size_t start_idx;
   size_t end_idx;
-  profiler_get_entries(profilerEntries, &start_idx, &end_idx);
+  profiler_get_entries(profiler_entries, &start_idx, &end_idx);
   size_t num_task_handles = get_num_task_handles();
-  TaskHandle_t* task_handles = new TaskHandle_t[num_task_handles]; 
+  TaskHandle_t* task_handles = (TaskHandle_t*)malloc(num_task_handles * sizeof(TaskHandle_t));
   profiler_get_task_handles(task_handles);
-
-  static const char* colorNameLookup[] = {
-    "",                                        // COLOR_UNDEFINED
-    ",\"cname\":\"good\"",                     // COLOR_GREEN
-    ",\"cname\":\"vsync_highlight_color\"",    // COLOR_LIGHT_GREEN
-    ",\"cname\":\"bad\"",                      // COLOR_DARK_ORANGE
-    ",\"cname\":\"terrible\"",                 // COLOR_DARK_RED
-    ",\"cname\":\"yellow\"",                   // COLOR_YELLOW
-    ",\"cname\":\"olive\"",                    // COLOR_OLIVE
-    ",\"cname\":\"black\"",                    // COLOR_BLACK
-    ",\"cname\":\"white\"",                    // COLOR_WHITE
-    ",\"cname\":\"generic_work\"",             // COLOR_GRAY
-    ",\"cname\":\"grey\""                      // COLOR_LIGHT_GRAY
-  };
-
-  static const char* json_header = "{\n"
-                                   "  \"traceEvents\": [\n";
-  static const char* json_footer = "    {}\n"
-                                   "  ],\n"
-                                   "  \"displayTimeUnit\": \"ms\",\n"
-                                   "  \"otherData\": {\n"
-                                   "    \"version\": \"ESP32 Profiler v1.0\"\n"
-                                   "  }\n"
-                                   "}";
-
-  static const size_t header_and_footer_bytes = 128; // rounded up
-
-  // compute conservative buffer size.
-  size_t min_type_size = get_smallest_type_size();
-  size_t max_number_elements = profiler_buffer_size / min_type_size;
-  size_t json_buffer_size = header_and_footer_bytes + max_number_elements * MAX_CHARS_PER_ENTRY;
-
-  char* json_buffer = new char[json_buffer_size];
 
   size_t lineLength = sprintf(json_buffer, "%s", json_header);
   
@@ -60,16 +63,14 @@ std::string get_json_trace() {
   size_t idx = start_idx;
   size_t loopCount = 0;
   do {
-    entry_header_t* entry_header = (entry_header_t*)(profilerEntries + idx);
+    entry_header_t* entry_header = (entry_header_t*)(profiler_entries + idx);
     if(entry_header->type == EVENT_TYPE_NONE) {
       idx = 0;
       loopCount++;
       continue;
     }
 
-    std::string threadNameStr = "Thread_" + std::to_string(task_handles[entry_header->task_id]);
-    //char* threadName = pcTaskGetTaskName(task_handles[entry_header->task_id]);
-    char* threadName = threadNameStr.c_str();
+    const char* threadName = pcTaskGetName(task_handles[entry_header->task_id]);
     if(entry_header->task_id == 0) {
       threadName = (char*)"INTERRUPT";
     }
@@ -119,7 +120,7 @@ std::string get_json_trace() {
         break;
     }
     ofst += lineLength;
-    assert(("Buffer overflow.", ofst <= json_buffer_size));
+    assert(ofst <= json_buffer_size && "Buffer overflow.");
 
     // advance idx
     idx += entry_size;
@@ -127,20 +128,12 @@ std::string get_json_trace() {
       loopCount++;
       idx = 0;
     }
+    vTaskDelay(pdMS_TO_TICKS(1));
   } while (idx != end_idx && loopCount <= 1);
 
-  lineLength = sprintf(json_buffer, "%s", json_footer);
+  lineLength = sprintf(chunk + ofst, "%s", json_footer);
 
-  std::string result(json_buffer);
-  delete[] json_buffer;
-  delete[] profiler_entries;
-  delete[] task_handles;
-
-  return result;
+  free(profiler_entries);
+  free(task_handles);
 }
 
-bool write_to_file(std::string file_path) {
-    std::ofstream out(file_path);
-    out << get_json_trace();
-    out.close();
-}
