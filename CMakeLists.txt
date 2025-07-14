@@ -1,4 +1,8 @@
-file(GLOB SOURCES src/*.c)
+file(GLOB SOURCES
+    src/*.c
+    src/*.cc
+    src/*.cpp
+)
 
 idf_component_register(
         SRCS ${SOURCES}
