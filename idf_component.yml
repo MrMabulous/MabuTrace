@@ -1,0 +1,6 @@
+## ESP-IDF Component Manifest
+version: "1.0.0"
+description: A lightweight C and C++ compatible tracing library for ESP32 with minimal overhead
+url: "https://github.com/your-username/my_dual_library"
+dependencies:
+  idf: ">=4.4"
