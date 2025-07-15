@@ -38,10 +38,6 @@ static volatile TaskHandle_t task_handles[16];
 static volatile uint8_t type_sizes[8];
 
 void mabutrace_init() {
-  mabutrace_init(64);
-}
-
-void mabutrace_init(int buffer_size_kb) {
   if(profiler_entries)
     return;
 #ifdef USE_PSRAM_IF_AVAILABLE

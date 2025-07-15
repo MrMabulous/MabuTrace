@@ -1,2 +1,2 @@
 # MabuTrace
-A lightweight C and C++compatible tracing library with minimal overhead
+A lightweight C and C++ compatible tracing library for ESP32 with minimal overhead
