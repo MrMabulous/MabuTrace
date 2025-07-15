@@ -1,8 +1,29 @@
+/*
+ * Copyright (C) 2020 Matthias Bühlmann
+ *
+ * This file is part of MabuTrace.
+ *
+ * MabuTrace is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * MabuTrace is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with MabuTrace.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #ifndef __MABUTRACE_H__
 #define __MABUTRACE_H__
 
 #include <stddef.h>
 #include <stdint.h>
+
+#include "esp_err.h"
 
 /*
 * Size of the circular buffer.
@@ -36,7 +57,6 @@
 * TRACE_INSTANT(const char* name, [uint8_t color]);
 * TRACE_COUNTER(const char* name, int24_t value, [uint8_t color]);
 */
-
 
 #define _OVERLOAD_MACRO(_1,_2,_3, _4, NAME,...) NAME
 
@@ -142,9 +162,14 @@ typedef struct {
   };
 } profiler_entry_t;
 
-void profiler_init();
+void mabutrace_init();
+void mabutrace_deinit();
+esp_err_t mabutrace_start_server(int port);
+size_t get_json_size();
+void get_json_trace(char* json_buffer, size_t json_buffer_size);
+void get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const char*, size_t));
+
 size_t get_smallest_type_size();
-void profiler_deinit();
 size_t get_buffer_size();
 void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* out_end_idx);
 size_t get_num_task_handles();

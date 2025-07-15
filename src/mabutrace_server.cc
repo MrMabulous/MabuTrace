@@ -1,28 +1,30 @@
-#include "mabutrace_server.h"
+/*
+ * Copyright (C) 2020 Matthias Bühlmann
+ *
+ * This file is part of MabuTrace.
+ *
+ * MabuTrace is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * MabuTrace is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with MabuTrace.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
-#include "mabutrace_export.h"
+#include "mabutrace.h"
+
 #include "download_website.h"
 
 #include "esp_http_server.h"
 #include "esp_log.h"
 
-static const char *TAG = "mabutrace_server";
-
-esp_err_t request_handler(httpd_req_t *req) {
-    // Get the json string of trace
-    size_t json_buffer_size = get_json_size();
-    ESP_LOGI(TAG, "json_buffer_size: %d", json_buffer_size);
-    char* json_buffer = (char*)malloc(json_buffer_size);
-    get_json_trace(json_buffer, json_buffer_size);
-    ESP_LOGI(TAG, "json: %s", json_buffer);
-    // Set the correct content type for JSON
-    httpd_resp_set_type(req, "application/json");
-    // Send the response
-    httpd_resp_send(req, json_buffer, HTTPD_RESP_USE_STRLEN);
-    free(json_buffer);
-    return ESP_OK;
-}
-
+static const char *TAG = "MABUTRACE";
 
 void process_chunk(void* ctx, const char* chunk, size_t size) {
     httpd_req_t* req = (httpd_req_t*)ctx;
@@ -36,7 +38,6 @@ esp_err_t request_handler_chunked(httpd_req_t *req) {
     // Set the correct content type for JSON
     httpd_resp_set_type(req, "application/json");
     // Send the response
-    //get_json_trace_chunked((void*)req, process_chunk);
     get_json_trace_chunked((void*)req, process_chunk);
 
     // Send the final, zero-length chunk to signify the end of the response
@@ -48,7 +49,7 @@ esp_err_t request_handler_chunked(httpd_req_t *req) {
     return ESP_OK;
 }
 
-esp_err_t start_mabutrace_server(int port) {
+esp_err_t mabutrace_start_server(int port) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = port;
     httpd_handle_t server_handle;

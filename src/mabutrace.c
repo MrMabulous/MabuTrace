@@ -1,16 +1,32 @@
+/*
+ * Copyright (C) 2020 Matthias Bühlmann
+ *
+ * This file is part of MabuTrace.
+ *
+ * MabuTrace is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * MabuTrace is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with MabuTrace.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "mabutrace.h"
 
 #include <string.h>
 
+#include "esp_log.h"
 #include "esp_timer.h"
-#include "rom/ets_sys.h"
-
-#define configUSE_TRACE_FACILITY 1
-#define traceTASK_DELAY_UNTIL() TRACE_SCOPE("vTaskDelayUntil")
-#define traceTASK_DELAY() TRACE_SCOPE("vTaskDelay")
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+
+static const char *TAG = "MABUTRACE";
 
 static void* profiler_entries = NULL;
 static volatile size_t entries_start_index = 0;
@@ -21,8 +37,11 @@ static volatile portMUX_TYPE link_index_mutex = portMUX_INITIALIZER_UNLOCKED;
 static volatile TaskHandle_t task_handles[16];
 static volatile uint8_t type_sizes[8];
 
+void mabutrace_init() {
+  mabutrace_init(64);
+}
 
-void profiler_init() {
+void mabutrace_init(int buffer_size_kb) {
   if(profiler_entries)
     return;
 #ifdef USE_PSRAM_IF_AVAILABLE
@@ -31,9 +50,9 @@ void profiler_init() {
   if(!profiler_entries)
     profiler_entries = calloc(PROFILER_BUFFER_SIZE_IN_BYTES, 1);
   if (!profiler_entries)
-    ets_printf("Failed to allocate trace buffer.\n");
+    ESP_LOGE(TAG, "Failed to allocate trace buffer.");
   else
-    ets_printf("Allocated %d bytes for trace buffer.\n", (int)PROFILER_BUFFER_SIZE_IN_BYTES);
+    ESP_LOGI(TAG, "Allocated %d bytes for trace buffer.", (int)PROFILER_BUFFER_SIZE_IN_BYTES);
   memset(task_handles, 0, sizeof(task_handles));
 
   memset(type_sizes, 0, sizeof(type_sizes));
@@ -56,7 +75,7 @@ size_t get_smallest_type_size() {
   return min_size;
 }
 
-void profiler_deinit() {
+void mabutrace_deinit() {
   if(!profiler_entries)
     return;
   taskENTER_CRITICAL(&profiler_index_mutex);
