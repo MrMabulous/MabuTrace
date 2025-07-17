@@ -48,27 +48,32 @@
 
 /*
 * The following macros should be used for tracing ([] denotes optional argument).
-* Note that name is NOT copied, meaning that the pointer should remain valid. For this reason it's recommended
-* that the macros are only used with string literals as name.
+* Note that name is NOT copied, meaning the pointer must remain valid until the trace is converted to JSON.
+* For this reason it's recommended that the macros are only used with string literals as name.
 *
 * TRC();
 * TRACE_SCOPE(const char* name, [uint8_t color]);
-* TRACE_SCOPE_LINKED(const char* name, uint16_t link_in, uint16_t* link_out, [uint8_t color]);
+* TRACE_FLOW_OUT(uint16_t* link_out, [const char* name], [uint8_t color]);
+* TRACE_FLOW_IN(uint16_t link_in);
 * TRACE_INSTANT(const char* name, [uint8_t color]);
 * TRACE_COUNTER(const char* name, int24_t value, [uint8_t color]);
 */
 
 #define _OVERLOAD_MACRO(_1,_2,_3, _4, NAME,...) NAME
 
-#define TRACE_SCOPE(...) _OVERLOAD_MACRO(__VA_ARGS__, 0, 0, _TRACE_SCOPE_COLORED, _TRACE_SCOPE_UNCOLORED)(__VA_ARGS__)
 #define TRC() TRACE_SCOPE(__func__)
-#define TRACE_SCOPE_LINKED(...) _OVERLOAD_MACRO(__VA_ARGS__, _TRACE_SCOPE_LINKED_COLORED, _TRACE_SCOPE_LINKED_UNCOLORED, 0, 0)(__VA_ARGS__)
+#define TRACE_SCOPE(...) _OVERLOAD_MACRO(__VA_ARGS__, 0, 0, _TRACE_SCOPE_COLORED, _TRACE_SCOPE_UNCOLORED)(__VA_ARGS__)
+#define TRACE_FLOW_OUT(...) _OVERLOAD_MACRO(__VA_ARGS__, 0, TRACE_FLOW_OUT_COLORED, _TRACE_FLOW_OUT_UNCOLORED, _TRACE_FLOW_OUT_UNNAMED_UNCOLORED)(__VA_ARGS__)
+#define TRACE_FLOW_IN(link_in) trace_flow_in(link_in);
 #define TRACE_INSTANT(...) _OVERLOAD_MACRO(__VA_ARGS__, 0, 0, _TRACE_INSTANT_COLORED, _TRACE_INSTANT_UNCOLORED)(__VA_ARGS__)
 #define TRACE_COUNTER(...) _OVERLOAD_MACRO(__VA_ARGS__, 0, _TRACE_COUNTER_COLORED, _TRACE_COUNTER_UNCOLORED, 0)(__VA_ARGS__)
 
+#define _TRACE_FLOW_OUT_UNNAMED_UNCOLORED(link_out) trace_flow_out(link_out, "flow", COLOR_UNDEFINED);
+#define _TRACE_FLOW_OUT_UNCOLORED(link_out, name) trace_flow_out(link_out, name, COLOR_UNDEFINED);
+#define _TRACE_FLOW_OUT_COLORED(link_out, name, color) trace_flow_out(link_out, name, color);
 #define _TRACE_INSTANT_UNCOLORED(name) trace_instant(name, COLOR_UNDEFINED);
 #define _TRACE_INSTANT_COLORED(name, color) trace_instant(name, color);
-#define _TRACE_INSTANT_LINKED(name, link_in, link_out, color) trace_instant(name, link_in, link_out, color);
+#define _TRACE_INSTANT_LINKED(name, link_in, link_out, color) trace_instant_linked(name, link_in, link_out, color);
 #define _TRACE_COUNTER_UNCOLORED(name, value) trace_counter(name, value, COLOR_UNDEFINED);
 #define _TRACE_COUNTER_COLORED(name, value, color) trace_counter(name, value, color);
 
@@ -177,6 +182,8 @@ void profiler_get_task_handles(void* output_taskhandle_16);
 profiler_duration_handle_t trace_begin(const char* name, uint8_t color);
 profiler_duration_handle_t trace_begin_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color);
 void trace_end(profiler_duration_handle_t* handle);
+void trace_flow_out(uint16_t* link_out, const char* name, uint8_t color);
+void trace_flow_in(uint16_t link_in);
 void trace_instant(const char* name, uint8_t color);
 void trace_instant_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color);
 void trace_counter(const char* name, int32_t value, uint8_t color);

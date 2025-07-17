@@ -40,23 +40,44 @@ static const char* download_html = R"html_string(
             text-align: center;
         }
 
-        #captureButton {
+        .button-container {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
             padding: 12px 24px;
             font-size: 16px;
             cursor: pointer;
             border: 1px solid #ccc;
             border-radius: 4px;
             background-color: #fff;
-            margin-bottom: 20px;
+            transition: background-color 0.2s;
         }
 
-        #captureButton:disabled {
-            cursor: not-allowed;
-            background-color: #e9e9e9;
+        button:hover:not(:disabled) {
+            background-color: #f8f8f8;
         }
         
+        button:disabled {
+            cursor: not-allowed;
+            background-color: #e9e9e9;
+            color: #aaa;
+            border-color: #ddd;
+        }
+        
+        #status-indicator {
+            width: 38px;
+            height: 38px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+
         /* The CSS Spinner */
-        #spinner {
+        .spinner {
             border: 4px solid #f3f3f3; /* Light grey base */
             border-top: 4px solid #007bff; /* Blue spinning part */
             border-radius: 50%;
@@ -65,10 +86,15 @@ static const char* download_html = R"html_string(
             animation: spin 1s linear infinite;
         }
 
-        /* The animation for rotation */
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        /* Checkmark styling */
+        .checkmark {
+            font-size: 30px;
+            color: #28a745;
         }
 
         #info {
@@ -83,20 +109,48 @@ static const char* download_html = R"html_string(
 
     <button id="captureButton">Capture Trace</button>
     
-    <!-- The spinner element will be shown/hidden by the script -->
-    <div id="spinner" style="display: none;"></div>
+    <div id="status-indicator"></div>
 
     <p id="info"></p>
 
+    <div class="button-container">
+        <button id="saveTraceButton" disabled>Save Trace</button>
+        <button id="openPerfettoButton" disabled>Open Trace in Perfetto</button>
+    </div>
+
     <script>
         const captureButton = document.getElementById('captureButton');
-        const spinner = document.getElementById('spinner');
+        const saveTraceButton = document.getElementById('saveTraceButton');
+        const openPerfettoButton = document.getElementById('openPerfettoButton');
+        const statusIndicator = document.getElementById('status-indicator');
         const info = document.getElementById('info');
 
+        let traceBlob = null; // Variable to hold the downloaded trace blob
+
+        // Resets the UI to the initial state, typically after an error.
+        const resetUIToInitial = () => {
+            captureButton.disabled = false;
+            saveTraceButton.disabled = true;
+            openPerfettoButton.disabled = true;
+            statusIndicator.innerHTML = '';
+            info.textContent = '';
+            traceBlob = null;
+        };
+
+        const setSpinner = () => {
+            statusIndicator.innerHTML = '<div class="spinner"></div>';
+        };
+
+        const setCheckmark = () => {
+            statusIndicator.innerHTML = '<div class="checkmark">✓</div>';
+        };
+
         captureButton.addEventListener('click', async () => {
-            // 1. Prepare UI for loading state
+            // 1. Prepare UI for loading state. Disable all buttons during download.
             captureButton.disabled = true;
-            spinner.style.display = 'block';
+            saveTraceButton.disabled = true;
+            openPerfettoButton.disabled = true;
+            setSpinner(); // Show spinner (replaces checkmark if present)
             info.textContent = 'Downloading trace...';
 
             const url = `${window.location.origin}/trace.json`;
@@ -108,11 +162,9 @@ static const char* download_html = R"html_string(
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 }
                 
-                // Read the response stream. Since we are using a spinner,
-                // we no longer need to calculate progress.
+                // Read the response stream chunk by chunk
                 const reader = response.body.getReader();
                 const chunks = [];
-
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) {
@@ -121,64 +173,96 @@ static const char* download_html = R"html_string(
                     chunks.push(value);
                 }
                 
-                info.textContent = 'Download complete. Opening save dialog...';
+                // Assemble the chunks into a Blob
+                traceBlob = new Blob(chunks, { type: 'application/json' });
 
-                const blob = new Blob(chunks, { type: 'application/json' });
-
-                // 2. SAVE THE FILE: Try modern API first, then fall back.
-                if (window.showSaveFilePicker) {
-                    try {
-                        const handle = await window.showSaveFilePicker({
-                            suggestedName: 'trace.json',
-                            types: [{
-                                description: 'JSON Trace File',
-                                accept: { 'application/json': ['.json'] },
-                            }],
-                        });
-                        const writable = await handle.createWritable();
-                        await writable.write(blob);
-                        await writable.close();
-                        info.textContent = 'Trace saved successfully!';
-                        return; // Success, exit function
-                    } catch (err) {
-                        if (err.name === 'AbortError') {
-                            info.textContent = 'Save cancelled.';
-                            return; 
-                        }
-                        // Fall through to legacy method on other errors
-                    }
-                }
-
-                // Fallback for older browsers or non-secure contexts
-                info.textContent = 'Using fallback save method...';
-                const blobUrl = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = blobUrl;
-                link.download = 'trace.json';
-                
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-
-                URL.revokeObjectURL(blobUrl);
-                info.textContent = 'Trace download initiated!';
+                // 2. Update UI on success. Enable all buttons.
+                setCheckmark();
+                info.textContent = 'Download complete. Ready to save or open.';
+                saveTraceButton.disabled = false;
+                openPerfettoButton.disabled = false;
+                captureButton.disabled = false; // Re-enable capture for a new run
 
             } catch (error) {
                 console.error('Failed to capture trace:', error);
                 info.textContent = `Error: ${error.message}`;
                 alert('Failed to capture trace. Check the console for details.');
-            } finally {
-                // 3. Reset the UI
-                captureButton.disabled = false;
-                spinner.style.display = 'none';
-                
-                // Keep the final status message visible for a few seconds
-                setTimeout(() => { 
-                    if (info.textContent !== 'Save cancelled.') {
-                        info.textContent = ''; 
-                    }
-                }, 4000);
+                resetUIToInitial(); // On error, reset completely
             }
+        });
+
+        saveTraceButton.addEventListener('click', async () => {
+            if (!traceBlob) {
+                alert('No trace data available. Please capture a trace first.');
+                return;
+            }
+            info.textContent = 'Opening save dialog...';
+            
+            if (window.showSaveFilePicker) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'trace.json',
+                        types: [{ description: 'JSON Trace File', accept: { 'application/json': ['.json'] } }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(traceBlob);
+                    await writable.close();
+                    info.textContent = 'Trace saved successfully!';
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        info.textContent = 'Save cancelled.';
+                        return;
+                    }
+                }
+            }
+            
+            try {
+                info.textContent = 'Using fallback save method...';
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(traceBlob);
+                link.download = 'trace.json';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+                info.textContent = 'Trace download initiated!';
+            } catch (err) {
+                console.error('Fallback save failed:', err);
+                info.textContent = 'Save failed.';
+            }
+        });
+
+        openPerfettoButton.addEventListener('click', async () => {
+            if (!traceBlob) {
+                alert('No trace data available. Please capture a trace first.');
+                return;
+            }
+
+            info.textContent = 'Opening Perfetto and waiting for it to be ready...';
+            const PERFETTO_ORIGIN = 'https://ui.perfetto.dev';
+            const win = window.open(PERFETTO_ORIGIN);
+
+            if (!win) {
+                info.textContent = 'Popup blocked! Please allow popups for this site.';
+                alert('Popup blocked! Please allow popups for this site.');
+                return;
+            }
+
+            const traceBuffer = await traceBlob.arrayBuffer();
+            let timer;
+
+            const onMessageHandler = (evt) => {
+                if (evt.origin !== PERFETTO_ORIGIN || evt.data !== 'PONG') return;
+                
+                window.clearInterval(timer);
+                win.postMessage(traceBuffer, PERFETTO_ORIGIN, [traceBuffer]);
+                info.textContent = 'Trace sent to Perfetto!';
+                window.removeEventListener('message', onMessageHandler);
+            };
+
+            window.addEventListener('message', onMessageHandler);
+            timer = setInterval(() => win.postMessage('PING', PERFETTO_ORIGIN), 50);
         });
     </script>
 

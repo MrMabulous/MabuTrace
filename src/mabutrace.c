@@ -84,7 +84,7 @@ size_t get_buffer_size() {
   return PROFILER_BUFFER_SIZE_IN_BYTES;
 }
 
-inline TaskHandle_t IRAM_ATTR get_current_task_handle() {
+static inline TaskHandle_t IRAM_ATTR get_current_task_handle() {
   if (xPortInIsrContext()) {
     return NULL;
   }
@@ -93,11 +93,11 @@ inline TaskHandle_t IRAM_ATTR get_current_task_handle() {
   }
 }
 
-inline TaskHandle_t IRAM_ATTR get_task_handle_from_id(uint8_t id) {
+static inline TaskHandle_t IRAM_ATTR get_task_handle_from_id(uint8_t id) {
   return task_handles[id];
 }
 
-inline uint8_t IRAM_ATTR get_current_task_id() {
+static inline uint8_t IRAM_ATTR get_current_task_id() {
   TaskHandle_t handle = get_current_task_handle();
   if (!handle) {
     return 0;
@@ -116,7 +116,7 @@ inline uint8_t IRAM_ATTR get_current_task_id() {
   return 0;
 }
 
-inline void IRAM_ATTR advance_pointers(uint8_t type_size, size_t* out_entry_idx) {
+static inline void IRAM_ATTR advance_pointers(uint8_t type_size, size_t* out_entry_idx) {
   if(!profiler_entries)
     return;
   taskENTER_CRITICAL(&profiler_index_mutex);
@@ -160,7 +160,7 @@ inline void IRAM_ATTR advance_pointers(uint8_t type_size, size_t* out_entry_idx)
   taskEXIT_CRITICAL(&profiler_index_mutex);
 }
 
-inline void IRAM_ATTR insert_link_event(uint16_t link, uint8_t link_type, uint64_t time_stamp, uint8_t cpu_id, uint8_t task_id) {
+static inline void IRAM_ATTR insert_link_event(uint16_t link, uint8_t link_type, uint64_t time_stamp, uint8_t cpu_id, uint8_t task_id) {
   if(!profiler_entries)
     return;
   size_t type_size = sizeof(link_entry_t);
@@ -262,6 +262,35 @@ void IRAM_ATTR trace_end(profiler_duration_handle_t* handle) {
   }
   if (handle->link_out) {
     insert_link_event(handle->link_out, LINK_TYPE_OUT, handle->time_stamp_begin_microseconds + duration - 1, cpu_id, task_id);
+  }
+}
+
+void IRAM_ATTR trace_flow_out(uint16_t* link_out, const char* name, uint8_t color) {
+  if(!profiler_entries)
+    return;
+  uint8_t task_id = get_current_task_id();
+  uint8_t cpu_id = (uint8_t)xPortGetCoreID();
+  uint64_t now = esp_timer_get_time();
+
+  if (link_out) {
+    if (*link_out == 0) {
+      taskENTER_CRITICAL(&link_index_mutex);
+      //critical section
+        *link_out = ++link_index;
+      taskEXIT_CRITICAL(&link_index_mutex);
+    }
+  }
+  if (link_out && *link_out) {
+    insert_link_event(*link_out, LINK_TYPE_OUT, now, cpu_id, task_id);
+  }
+}
+
+void IRAM_ATTR trace_flow_in(uint16_t link_in) {
+  uint8_t task_id = get_current_task_id();
+  uint8_t cpu_id = (uint8_t)xPortGetCoreID();
+  uint64_t now = esp_timer_get_time();
+  if (link_in) {
+    insert_link_event(link_in, LINK_TYPE_IN, now, cpu_id, task_id);
   }
 }
 
