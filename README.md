@@ -91,7 +91,7 @@ git clone https://github.com/MrMabulous/MabuTrace.git
     -   You will see the MabuTrace web UI.
     -   Click **"Capture Trace"** to download the latest trace data from the ESP32's buffer. Note that clicking will **end** the trace, as it is already being continuously written to the ring buffer.
     -   Once complete, you can:
-        -   **"Save Trace"** to download the `trace.json` file locally. Then open `chorme://tracing` and load the file. (Chrome only)
+        -   **"Save Trace"** to download the `trace.json` file locally. Then open `chrome://tracing` and load the file. (Chrome only)
         -   **"Open Trace in Perfetto"** to automatically open a new tab and load the trace data for analysis. (Any browser)
 
 ## API by Example
