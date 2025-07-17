@@ -62,14 +62,12 @@ void setup() {
   Queue2 = xQueueCreate(2, sizeof(message_t));
 
   //Setup Task
-  //xTaskCreatePinnedToCore(
   xTaskCreate(
     workerTask, "Worker Task 1",  // A name just for humans
     2048,  // The stack size can be checked by calling `uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);`
     NULL,  // Task parameter which can modify the task behavior. This must be passed as pointer to void.
     2,  // Priority
     NULL  // Task handle is not used here - simply pass NULL
-    //0  // Run on core 0
   );
   xTaskCreate(
     workerTask, "Worker Task 2",  // A name just for humans
@@ -77,7 +75,6 @@ void setup() {
     NULL,  // Task parameter which can modify the task behavior. This must be passed as pointer to void.
     2,  // Priority
     NULL  // Task handle is not used here - simply pass NULL
-    //0  // Run on core 0
   );
 
   //Initialize MabuTrace and start server on port 81
@@ -89,6 +86,7 @@ void setup() {
   Serial.println(":81/ to capture a trace.");
 }
 
+// Timer interrupt executed every 10ms
 void ARDUINO_ISR_ATTR onTimer() {
   //It's fine to issue traces from interrupts.
   TRC();
@@ -113,18 +111,18 @@ void ARDUINO_ISR_ATTR onTimer() {
   }
 }
 
+//Naive implementation to fill buffer with random string consisting of characters A-Z
 void ARDUINO_ISR_ATTR randomFill(char* buf, size_t length) {
   //TRC() here is equivalent to TRACE_SCOPE("randomFill");
   //TRC is a shortcut to issue a TRACE_SCOPE using the name of the function it is called from.
   TRC();
   for(int i=0; i<length-1; i++) {
-    //Assign random character from A-Z
     buf[i] = random(65, 91);
   }
   buf[length-1] = '\0';
 }
 
-//Takes messages from Queue1, sorts characters alphabetically and then adds them to Queue2
+//Worker task that takes messages from Queue1, searches for longest palindorme and then posts result to Queue2
 void workerTask(void *pvParameters) {
   for (;;) {
     TRACE_SCOPE("Worker Task loop");
@@ -153,6 +151,7 @@ void workerTask(void *pvParameters) {
   }
 }
 
+//Naive implementation to find longest palindrome in given buffer and write result into buffer
 bool findLongestPalindrome(char* buf, size_t len) {
   //TRC() here is equivalent to TRACE_SCOPE("findLongestPalindrome");
   //TRC is a shortcut to issue a TRACE_SCOPE using the name of the function it is called from.
@@ -178,6 +177,7 @@ bool findLongestPalindrome(char* buf, size_t len) {
   return false;
 }
 
+//Arduino main loop. Takes palindrom strings from Queue2 and prints them
 void loop() {
   //TRC() here is equivalent to TRACE_SCOPE("loop");
   //TRC is a shortcut to issue a TRACE_SCOPE using the name of the function it is called from.
