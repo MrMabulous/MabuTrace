@@ -1,0 +1,3 @@
+dependencies:
+  mabutrace:
+    git: https://github.com/MrMabulous/MabuTrace.git

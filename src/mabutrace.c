@@ -249,7 +249,7 @@ profiler_duration_handle_t IRAM_ATTR trace_begin(const char* name, uint8_t color
 }
 
 profiler_duration_handle_t IRAM_ATTR trace_begin_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color) {
-  profiler_duration_handle_t result;
+  profiler_duration_handle_t result = {0};
   if(!active_writers_semaphore)
     return result;
   BaseType_t must_yield_from_isr = pdFALSE;
