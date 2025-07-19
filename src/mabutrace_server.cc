@@ -28,29 +28,34 @@ static const char *TAG = "MABUTRACE";
 
 void process_chunk(void* ctx, const char* chunk, size_t size) {
     httpd_req_t* req = (httpd_req_t*)ctx;
+    assert(chunk[size] == '\0' && "Expected to be null terminated");
+
     if (httpd_resp_send_chunk(req, chunk, size) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send chunk");
     }
 }
 
 esp_err_t request_handler_chunked(httpd_req_t *req) {
+    ESP_LOGI(TAG, "download request received.");
     // Get the json string of trace
     // Set the correct content type for JSON
     httpd_resp_set_type(req, "application/json");
     // Send the response
-    get_json_trace_chunked((void*)req, process_chunk);
-
+    if(get_json_trace_chunked((void*)req, process_chunk) != ESP_OK) {
+        httpd_resp_send_500(req); // Convenience function for 500
+        return ESP_OK;
+    }
     // Send the final, zero-length chunk to signify the end of the response
     if (httpd_resp_send_chunk(req, NULL, 0) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send final chunk");
         return ESP_FAIL;
     }
-
     return ESP_OK;
 }
 
 esp_err_t mabutrace_start_server(int port) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.task_priority++;
     config.server_port = port;
     httpd_handle_t server_handle;
 

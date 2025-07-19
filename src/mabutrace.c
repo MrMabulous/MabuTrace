@@ -24,8 +24,6 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
-#include "freertos/FreeRTOS.h"
-
 static const char *TAG = "MABUTRACE";
 
 static void* profiler_entries = NULL;
@@ -36,17 +34,21 @@ static volatile uint16_t link_index = 0;
 static volatile portMUX_TYPE link_index_mutex = portMUX_INITIALIZER_UNLOCKED;
 static volatile TaskHandle_t task_handles[16];
 static volatile uint8_t type_sizes[8];
+static volatile bool tracing_enabled = false;
+static SemaphoreHandle_t active_writers_semaphore; // Tracks in-flight writers
 
-void mabutrace_init() {
+esp_err_t mabutrace_init() {
   if(profiler_entries)
-    return;
+    return ESP_ERR_INVALID_STATE;
 #ifdef USE_PSRAM_IF_AVAILABLE
   profiler_entries = heap_caps_calloc(PROFILER_BUFFER_SIZE_IN_BYTES, 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 #endif
   if(!profiler_entries)
     profiler_entries = calloc(PROFILER_BUFFER_SIZE_IN_BYTES, 1);
-  if (!profiler_entries)
-    ESP_LOGE(TAG, "Failed to allocate trace buffer.");
+  if (!profiler_entries) {
+    ESP_LOGE(TAG, "Failed to allocate %d bytes for trace buffer.", (int)PROFILER_BUFFER_SIZE_IN_BYTES);
+    return ESP_ERR_NO_MEM;
+  }
   else
     ESP_LOGI(TAG, "Allocated %d bytes for trace buffer.", (int)PROFILER_BUFFER_SIZE_IN_BYTES);
   memset(task_handles, 0, sizeof(task_handles));
@@ -58,6 +60,18 @@ void mabutrace_init() {
   type_sizes[EVENT_TYPE_INSTANT_COLORED] = sizeof(instant_colored_entry_t);
   type_sizes[EVENT_TYPE_COUNTER] = sizeof(counter_entry_t);
   type_sizes[EVENT_TYPE_LINK] = sizeof(link_entry_t);
+
+  #define MAX_CONCURRENT_WRITERS 255
+  active_writers_semaphore = xSemaphoreCreateCounting(MAX_CONCURRENT_WRITERS, 0);
+  if (active_writers_semaphore == NULL) {
+      free(profiler_entries);
+      profiler_entries = NULL;
+      ESP_LOGE(TAG, "Failed to create active_writers_semaphore");
+      return ESP_ERR_NO_MEM;
+  }
+
+  tracing_enabled = true;
+  return ESP_OK;
 }
 
 size_t get_smallest_type_size() {
@@ -71,13 +85,19 @@ size_t get_smallest_type_size() {
   return min_size;
 }
 
-void mabutrace_deinit() {
+esp_err_t mabutrace_deinit() {
   if(!profiler_entries)
-    return;
-  taskENTER_CRITICAL(&profiler_index_mutex);
+    return ESP_ERR_INVALID_STATE;
+  tracing_enabled = false;
+  // Wait for writers to drain before deleting the semaphore
+  while(uxSemaphoreGetCount(active_writers_semaphore) > 0) {
+      vTaskDelay(pdMS_TO_TICKS(1));
+  }
+  vSemaphoreDelete(active_writers_semaphore);
+  active_writers_semaphore = NULL;
   free(profiler_entries);
   profiler_entries = NULL;
-  taskEXIT_CRITICAL(&profiler_index_mutex);
+  return ESP_OK;
 }
 
 size_t get_buffer_size() {
@@ -90,6 +110,22 @@ static inline TaskHandle_t IRAM_ATTR get_current_task_handle() {
   }
   else {
     return xTaskGetCurrentTaskHandle();
+  }
+}
+
+static inline void semaphore_give(SemaphoreHandle_t semaphore, BaseType_t* must_yield_from_isr) {
+  if (xPortInIsrContext()) {
+    xSemaphoreGiveFromISR(semaphore, must_yield_from_isr);
+  } else {
+    xSemaphoreGive(semaphore);
+  }
+}
+
+static inline void semaphore_take(SemaphoreHandle_t semaphore, BaseType_t* must_yield_from_isr) {
+  if (xPortInIsrContext()) {
+    xSemaphoreTakeFromISR(semaphore, must_yield_from_isr);
+  } else {
+    xSemaphoreTake(semaphore, portMAX_DELAY);
   }
 }
 
@@ -117,8 +153,6 @@ static inline uint8_t IRAM_ATTR get_current_task_id() {
 }
 
 static inline void IRAM_ATTR advance_pointers(uint8_t type_size, size_t* out_entry_idx) {
-  if(!profiler_entries)
-    return;
   taskENTER_CRITICAL(&profiler_index_mutex);
   {
     assert(entries_next_index <= PROFILER_BUFFER_SIZE_IN_BYTES);
@@ -161,8 +195,14 @@ static inline void IRAM_ATTR advance_pointers(uint8_t type_size, size_t* out_ent
 }
 
 static inline void IRAM_ATTR insert_link_event(uint16_t link, uint8_t link_type, uint64_t time_stamp, uint8_t cpu_id, uint8_t task_id) {
-  if(!profiler_entries)
+  if(!active_writers_semaphore)
     return;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto exit;
+  }
+
   size_t type_size = sizeof(link_entry_t);
   size_t entry_idx = 0;
   advance_pointers(type_size, &entry_idx);
@@ -173,24 +213,35 @@ static inline void IRAM_ATTR insert_link_event(uint16_t link, uint8_t link_type,
   entry->time_stamp_begin_microseconds = (uint32_t)time_stamp;
   entry->link = link;
   entry->link_type = link_type;
+
+  exit:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
 }
 
-void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* out_end_idx) {
-  if(!profiler_entries)
-    return;
-  taskENTER_CRITICAL(&profiler_index_mutex);
-    memcpy(output_buffer, profiler_entries, PROFILER_BUFFER_SIZE_IN_BYTES);
-    *out_start_idx = entries_start_index;
-    *out_end_idx = entries_next_index;
-  taskEXIT_CRITICAL(&profiler_index_mutex);
+const char* suspend_tracing_and_get_profiler_entries(size_t* out_start_idx, size_t* out_end_idx) {
+  tracing_enabled = false;
+  //Wait for all active writers to finish.
+  while (uxSemaphoreGetCount(active_writers_semaphore) > 0) {
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+  *out_start_idx = entries_start_index;
+  *out_end_idx = entries_next_index;
+  return (char*)profiler_entries;
+}
+
+void resume_tracing() {
+  tracing_enabled = true;
 }
 
 size_t get_num_task_handles() {
   return 16;
 }
 
-void profiler_get_task_handles(void* output_taskhandle_16) {
-  memcpy(output_taskhandle_16, task_handles, sizeof(TaskHandle_t) * 16);
+const TaskHandle_t* profiler_get_task_handles() {
+  assert(!tracing_enabled && "Must only call profiler_get_task_handles while tracing is suspended.");
+  return task_handles;
 }
 
 profiler_duration_handle_t IRAM_ATTR trace_begin(const char* name, uint8_t color) {
@@ -199,8 +250,14 @@ profiler_duration_handle_t IRAM_ATTR trace_begin(const char* name, uint8_t color
 
 profiler_duration_handle_t IRAM_ATTR trace_begin_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color) {
   profiler_duration_handle_t result;
-  if(!profiler_entries)
+  if(!active_writers_semaphore)
     return result;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto exit;
+  }
+
   result.time_stamp_begin_microseconds = esp_timer_get_time();
   result.name = name;
   result.link_in = link_in;
@@ -219,12 +276,23 @@ profiler_duration_handle_t IRAM_ATTR trace_begin_linked(const char* name, uint16
   else {
     result.link_out = 0;
   }
+
+  exit:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
   return result;
 }
 
 void IRAM_ATTR trace_end(profiler_duration_handle_t* handle) {
-  if(!profiler_entries)
+  if(!active_writers_semaphore)
     return;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto exit;
+  }
+
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = (uint8_t)xPortGetCoreID();
   uint64_t now = esp_timer_get_time();
@@ -263,11 +331,22 @@ void IRAM_ATTR trace_end(profiler_duration_handle_t* handle) {
   if (handle->link_out) {
     insert_link_event(handle->link_out, LINK_TYPE_OUT, handle->time_stamp_begin_microseconds + duration - 1, cpu_id, task_id);
   }
+
+  exit:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
 }
 
 void IRAM_ATTR trace_flow_out(uint16_t* link_out, const char* name, uint8_t color) {
-  if(!profiler_entries)
+  if(!active_writers_semaphore)
     return;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto exit;
+  }
+
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = (uint8_t)xPortGetCoreID();
   uint64_t now = esp_timer_get_time();
@@ -283,15 +362,33 @@ void IRAM_ATTR trace_flow_out(uint16_t* link_out, const char* name, uint8_t colo
   if (link_out && *link_out) {
     insert_link_event(*link_out, LINK_TYPE_OUT, now, cpu_id, task_id);
   }
+
+  exit:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
 }
 
 void IRAM_ATTR trace_flow_in(uint16_t link_in) {
+  if(!active_writers_semaphore)
+    return;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto exit;
+  }
+
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = (uint8_t)xPortGetCoreID();
   uint64_t now = esp_timer_get_time();
   if (link_in) {
     insert_link_event(link_in, LINK_TYPE_IN, now, cpu_id, task_id);
   }
+
+  exit:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
 }
 
 void IRAM_ATTR trace_instant(const char* name, uint8_t color) {
@@ -299,8 +396,14 @@ void IRAM_ATTR trace_instant(const char* name, uint8_t color) {
 }
 
 void IRAM_ATTR trace_instant_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color) {
-  if(!profiler_entries)
+  if(!active_writers_semaphore)
     return;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto exit;
+  }
+
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = (uint8_t)xPortGetCoreID();
   uint64_t now = esp_timer_get_time();
@@ -332,11 +435,20 @@ void IRAM_ATTR trace_instant_linked(const char* name, uint16_t link_in, uint16_t
   if (link_out && *link_out) {
     insert_link_event(*link_out, LINK_TYPE_OUT, now, cpu_id, task_id);
   }
+
+  exit:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
 }
 
 void IRAM_ATTR trace_counter(const char* name, int32_t value, uint8_t color) {
-  if(!profiler_entries)
-    return;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto exit;
+  }
+
   uint8_t task_id = get_current_task_id();
   uint8_t cpu_id = (uint8_t)xPortGetCoreID();
   uint64_t now = esp_timer_get_time();
@@ -352,4 +464,9 @@ void IRAM_ATTR trace_counter(const char* name, int32_t value, uint8_t color) {
   entry->time_stamp_begin_microseconds = (uint32_t)now;
   entry->name = name;
   entry->value = value;
+
+  exit:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
 }

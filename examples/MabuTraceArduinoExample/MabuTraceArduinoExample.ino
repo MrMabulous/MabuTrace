@@ -17,6 +17,11 @@
  * along with MabuTrace.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#if SOC_TEMP_SENSOR_SUPPORTED
+#include "driver/temperature_sensor.h"
+#endif
+#include "esp_chip_info.h"
+#include "esp_random.h"
 #include <WiFi.h>
 #include <mabutrace.h>
 
@@ -27,6 +32,11 @@ void ARDUINO_ISR_ATTR onTimer();
 void ARDUINO_ISR_ATTR randomFill(char* buf, size_t length);
 bool findLongestPalindrome(char* buf, size_t length);
 void workerTask(void *pvParameters);
+
+// Define Temperature sensor handle
+#if SOC_TEMP_SENSOR_SUPPORTED
+temperature_sensor_handle_t temp_handle = NULL;
+#endif
 
 // Define timer
 hw_timer_t *timer = NULL;
@@ -50,6 +60,13 @@ void setup() {
   }
   Serial.println("\nWiFi connected.");
 
+#if SOC_TEMP_SENSOR_SUPPORTED
+  //Setup temperature sensor
+  temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 50);
+  ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor_config, &temp_handle));
+  ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
+#endif
+
   //Setup timer frequency of 1Mhz
   timer = timerBegin(1000000);
   timerAttachInterrupt(timer, &onTimer);
@@ -61,25 +78,25 @@ void setup() {
   Queue1 = xQueueCreate(2, sizeof(message_t));
   Queue2 = xQueueCreate(2, sizeof(message_t));
 
-  //Setup Task
-  xTaskCreate(
-    workerTask, "Worker Task 1",  // A name just for humans
-    2048,  // The stack size can be checked by calling `uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);`
-    NULL,  // Task parameter which can modify the task behavior. This must be passed as pointer to void.
-    2,  // Priority
-    NULL  // Task handle is not used here - simply pass NULL
-  );
-  xTaskCreate(
-    workerTask, "Worker Task 2",  // A name just for humans
-    2048,  // The stack size can be checked by calling `uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);`
-    NULL,  // Task parameter which can modify the task behavior. This must be passed as pointer to void.
-    2,  // Priority
-    NULL  // Task handle is not used here - simply pass NULL
-  );
+  //Setup as many worker tasks as there are cpu cores
+  esp_chip_info_t chip_info;
+  esp_chip_info(&chip_info);
+  char worker_task_name[16];
+  for(int i=0; i<chip_info.cores; i++) {
+    snprintf(worker_task_name, sizeof(worker_task_name), "Worker Task %d", i);
+    xTaskCreate(
+      workerTask,  // The task function
+      worker_task_name,  // A name just for humans
+      2048,  // The stack size can be checked by calling `uxHighWaterMark = uxTaskGetStackHighWaterMark(NULL);`
+      NULL,  // Task parameter which can modify the task behavior. This must be passed as pointer to void.
+      2,  // Priority
+      NULL  // Task handle is not used here - simply pass NULL
+    );
+  }
 
   //Initialize MabuTrace and start server on port 81
-  mabutrace_init();
-  mabutrace_start_server(81);
+  ESP_ERROR_CHECK(mabutrace_init());
+  ESP_ERROR_CHECK(mabutrace_start_server(81));
 
   Serial.print("MabuTrace server started. Go to ");
   Serial.print(WiFi.localIP());
@@ -111,15 +128,24 @@ void ARDUINO_ISR_ATTR onTimer() {
   }
 }
 
-//Naive implementation to fill buffer with random string consisting of characters A-Z
+//Fill buffer with random string consisting of characters A-Z
 void ARDUINO_ISR_ATTR randomFill(char* buf, size_t length) {
   //TRC() here is equivalent to TRACE_SCOPE("randomFill");
   //TRC is a shortcut to issue a TRACE_SCOPE using the name of the function it is called from.
   TRC();
-  for(int i=0; i<length-1; i++) {
-    buf[i] = random(65, 91);
+  {
+    TRACE_SCOPE("esp_fill_random");
+    esp_fill_random(buf, length-1);
   }
-  buf[length-1] = '\0';
+  {
+    TRACE_SCOPE("map range");
+    // Upper case ASCII letters are from values A=65 - Z=90
+    for(int i=0; i<length-1; i++) {
+      uint8_t c = buf[i];
+      buf[i] = c % 26 + 65;
+    }
+    buf[length-1] = '\0';
+  }
 }
 
 //Worker task that takes messages from Queue1, searches for longest palindorme and then posts result to Queue2
@@ -182,6 +208,15 @@ void loop() {
   //TRC() here is equivalent to TRACE_SCOPE("loop");
   //TRC is a shortcut to issue a TRACE_SCOPE using the name of the function it is called from.
   TRC();
+#if SOC_TEMP_SENSOR_SUPPORTED
+  {
+    TRACE_SCOPE("Read temperature");
+    float temp_out;
+    ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &temp_out));
+    int temp_rounded = (int)(temp_out + 0.5f);
+    TRACE_COUNTER("Temperature", temp_rounded);
+  }
+#endif
   message_t message;
   {
     //Trace xQueueReceive separately so we see in the trace when the task is blocked by an empty queue.
@@ -193,6 +228,10 @@ void loop() {
   TRACE_FLOW_IN(message.link);
   {
     TRACE_SCOPE("Serial.println");
-    Serial.println(message.line);
+    //print palindromes longer than 7 chars
+    if(strnlen(message.line, sizeof(message.line)) > 7) {
+      Serial.print("Palindrome generated: ");
+      Serial.println(message.line);
+    }
   }
 }

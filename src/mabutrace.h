@@ -24,12 +24,18 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 /*
 * Size of the circular buffer.
 */
+#define PROFILER_BUFFER_SIZE_IN_BYTES 65536 // 64kB
+
+/*
+* Uncomment to place ringbuffer in external ram.
+*/
 //#define USE_PSRAM_IF_AVAILABLE
-#define PROFILER_BUFFER_SIZE_IN_BYTES 65536 // 64kb
 
 /*
 * Predefined colors.
@@ -167,18 +173,19 @@ typedef struct {
   };
 } profiler_entry_t;
 
-void mabutrace_init();
-void mabutrace_deinit();
+esp_err_t mabutrace_init();
+esp_err_t mabutrace_deinit();
 esp_err_t mabutrace_start_server(int port);
 size_t get_json_size();
-void get_json_trace(char* json_buffer, size_t json_buffer_size);
-void get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const char*, size_t));
+esp_err_t get_json_trace(char* json_buffer, size_t json_buffer_size);
+esp_err_t get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const char*, size_t));
 
 size_t get_smallest_type_size();
 size_t get_buffer_size();
-void profiler_get_entries(void* output_buffer, size_t* out_start_idx, size_t* out_end_idx);
+const char* suspend_tracing_and_get_profiler_entries(size_t* out_start_idx, size_t* out_end_idx);
+void resume_tracing();
 size_t get_num_task_handles();
-void profiler_get_task_handles(void* output_taskhandle_16);
+const TaskHandle_t* profiler_get_task_handles();
 profiler_duration_handle_t trace_begin(const char* name, uint8_t color);
 profiler_duration_handle_t trace_begin_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color);
 void trace_end(profiler_duration_handle_t* handle);
