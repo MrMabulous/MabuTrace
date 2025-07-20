@@ -60,6 +60,8 @@ esp_err_t mabutrace_init() {
   type_sizes[EVENT_TYPE_INSTANT_COLORED] = sizeof(instant_colored_entry_t);
   type_sizes[EVENT_TYPE_COUNTER] = sizeof(counter_entry_t);
   type_sizes[EVENT_TYPE_LINK] = sizeof(link_entry_t);
+  type_sizes[EVENT_TYPE_TASK_SWITCH_IN] = sizeof(task_switch_entry_t);
+  type_sizes[EVENT_TYPE_TASK_SWITCH_OUT] = sizeof(task_switch_entry_t);
 
   #define MAX_CONCURRENT_WRITERS 255
   active_writers_semaphore = xSemaphoreCreateCounting(MAX_CONCURRENT_WRITERS, 0);
