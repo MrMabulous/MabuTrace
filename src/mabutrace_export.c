@@ -238,13 +238,25 @@ esp_err_t get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const c
                               (unsigned int)entry->link, phase, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds);
         break;
       }
+      case EVENT_TYPE_TASK_SWITCH_IN:
+      case EVENT_TYPE_TASK_SWITCH_OUT: {
+        task_switch_entry_t* entry = (task_switch_entry_t*)entry_header;
+        entry_size = sizeof(task_switch_entry_t);
+        char phase = (entry_header->type == EVENT_TYPE_TASK_SWITCH_IN) ? 'B' : 'E';
+        char* cpu_name = (entry_header->cpu_id == 0) ? "CPU 0" : "CPU 1";
+        // Using the CPU name as tid since this doesn't track a particular task but task execution on a particular CPU core
+        lineLength = snprintf(buf, sizeof(buf), "    {\"name\":\"%s\",\"cat\":\"task\",\"ph\":\"%c\",\"pid\":2,\"tid\":\"%s\",\"ts\":%llu},\n",
+                             threadName, phase, cpu_name, (unsigned long long int)entry->time_stamp);
+        break;
+      }
       case EVENT_TYPE_NONE:
-      default:
+      default: {
         int type = entry_header->type;
         ESP_LOGE(TAG, "invalid event type: %d\n", type);
         res = ESP_ERR_INVALID_STATE;
         goto cleanup;
         break;
+      }
     }
     assert(lineLength >= 0 && lineLength < sizeof(buf) && "Failed to correctly write line.");
     process_chunk(ctx, buf, lineLength);
