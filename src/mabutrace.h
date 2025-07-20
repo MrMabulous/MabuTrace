@@ -155,6 +155,13 @@ typedef struct {
 #define LINK_TYPE_OUT 1
 
 typedef struct {
+  entry_header_t header;
+  uint32_t time_stamp;  // Timestamp of the entry
+} __attribute__((packed)) task_switch_entry_t;
+#define EVENT_TYPE_TASK_SWITCH_IN 6
+#define EVENT_TYPE_TASK_SWITCH_OUT 7
+
+typedef struct {
   uint8_t type;  // Type of event. Based on this type, different fields from the union part are valid.
   uint8_t cpu_id;  // ID of CPU from which event was traced.
   uint8_t color;  // One of a few predefined color values.

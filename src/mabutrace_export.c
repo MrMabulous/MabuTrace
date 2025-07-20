@@ -127,9 +127,19 @@ esp_err_t get_json_trace(char* json_buffer, size_t json_buffer_size) {
         entry_size = sizeof(link_entry_t);
         char phase = (entry->link_type == LINK_TYPE_IN) ? 'f' : 's';
         lineLength = sprintf(chunk + ofst, "    {\"name\":\"flow\",\"cat\":\"flow\",\"id\":%u,\"ph\":\"%c\",\"pid\":1,\"tid\":\"%s\",\"ts\":%llu},\n",
-                            (unsigned int)entry->link, phase, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds); 
+                            (unsigned int)entry->link, phase, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds);
         break;
       }
+      case EVENT_TYPE_TASK_SWITCH_IN:
+      case EVENT_TYPE_TASK_SWITCH_OUT:
+        task_switch_entry_t* entry = (task_switch_entry_t*)entry_header;
+        entry_size = sizeof(task_switch_entry_t);
+        char phase = (entry_header->type == EVENT_TYPE_TASK_SWITCH_IN) ? 'B' : 'E';
+        char* cpu_name = (entry_header->cpu_id == 0) ? "CPU 0" : "CPU 1";
+        // Using the CPU name as tid since this doesn't track a particular task but task execution on a particular CPU core
+        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"cat\":\"task\",\"ph\":\"%c\",\"pid\":1,\"tid\":\"%s\",\"ts\":%llu},\n",
+                             threadName, phase, cpu_name, (unsigned long long int)entry->time_stamp);
+        break;
       case EVENT_TYPE_NONE:
       default:
         int type = entry_header->type;

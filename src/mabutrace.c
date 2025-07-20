@@ -200,7 +200,7 @@ static inline void IRAM_ATTR insert_link_event(uint16_t link, uint8_t link_type,
   BaseType_t must_yield_from_isr = pdFALSE;
   semaphore_give(active_writers_semaphore, &must_yield_from_isr);
   if(!tracing_enabled) {
-    goto exit;
+    goto cleanup;
   }
 
   size_t type_size = sizeof(link_entry_t);
@@ -214,7 +214,7 @@ static inline void IRAM_ATTR insert_link_event(uint16_t link, uint8_t link_type,
   entry->link = link;
   entry->link_type = link_type;
 
-  exit:
+  cleanup:
   semaphore_take(active_writers_semaphore, &must_yield_from_isr);
   if(must_yield_from_isr)
     portYIELD_FROM_ISR();
@@ -255,7 +255,7 @@ profiler_duration_handle_t IRAM_ATTR trace_begin_linked(const char* name, uint16
   BaseType_t must_yield_from_isr = pdFALSE;
   semaphore_give(active_writers_semaphore, &must_yield_from_isr);
   if(!tracing_enabled) {
-    goto exit;
+    goto cleanup;
   }
 
   result.time_stamp_begin_microseconds = esp_timer_get_time();
@@ -277,7 +277,7 @@ profiler_duration_handle_t IRAM_ATTR trace_begin_linked(const char* name, uint16
     result.link_out = 0;
   }
 
-  exit:
+  cleanup:
   semaphore_take(active_writers_semaphore, &must_yield_from_isr);
   if(must_yield_from_isr)
     portYIELD_FROM_ISR();
@@ -290,7 +290,7 @@ void IRAM_ATTR trace_end(profiler_duration_handle_t* handle) {
   BaseType_t must_yield_from_isr = pdFALSE;
   semaphore_give(active_writers_semaphore, &must_yield_from_isr);
   if(!tracing_enabled) {
-    goto exit;
+    goto cleanup;
   }
 
   uint8_t task_id = get_current_task_id();
@@ -332,7 +332,36 @@ void IRAM_ATTR trace_end(profiler_duration_handle_t* handle) {
     insert_link_event(handle->link_out, LINK_TYPE_OUT, handle->time_stamp_begin_microseconds + duration - 1, cpu_id, task_id);
   }
 
-  exit:
+  cleanup:
+  semaphore_take(active_writers_semaphore, &must_yield_from_isr);
+  if(must_yield_from_isr)
+    portYIELD_FROM_ISR();
+}
+
+void IRAM_ATTR trace_task_switch(uint8_t type) {
+  if(!active_writers_semaphore)
+    return;
+  BaseType_t must_yield_from_isr = pdFALSE;
+  semaphore_give(active_writers_semaphore, &must_yield_from_isr);
+  if(!tracing_enabled) {
+    goto cleanup;
+  }
+
+  uint8_t task_id = get_current_task_id();
+  uint8_t cpu_id = (uint8_t)xPortGetCoreID();
+  uint64_t now = esp_timer_get_time();
+  size_t type_size = sizeof(task_switch_entry_t);
+
+  size_t entry_idx = 0;
+  advance_pointers(type_size, &entry_idx);
+
+  task_switch_entry_t* entry = (task_switch_entry_t*)(profiler_entries + entry_idx);
+  entry->header.type = type;
+  entry->header.cpu_id = cpu_id;
+  entry->header.task_id = task_id;
+  entry->time_stamp = (uint32_t)now;
+
+  cleanup:
   semaphore_take(active_writers_semaphore, &must_yield_from_isr);
   if(must_yield_from_isr)
     portYIELD_FROM_ISR();
@@ -344,7 +373,7 @@ void IRAM_ATTR trace_flow_out(uint16_t* link_out, const char* name, uint8_t colo
   BaseType_t must_yield_from_isr = pdFALSE;
   semaphore_give(active_writers_semaphore, &must_yield_from_isr);
   if(!tracing_enabled) {
-    goto exit;
+    goto cleanup;
   }
 
   uint8_t task_id = get_current_task_id();
@@ -363,7 +392,7 @@ void IRAM_ATTR trace_flow_out(uint16_t* link_out, const char* name, uint8_t colo
     insert_link_event(*link_out, LINK_TYPE_OUT, now, cpu_id, task_id);
   }
 
-  exit:
+  cleanup:
   semaphore_take(active_writers_semaphore, &must_yield_from_isr);
   if(must_yield_from_isr)
     portYIELD_FROM_ISR();
@@ -375,7 +404,7 @@ void IRAM_ATTR trace_flow_in(uint16_t link_in) {
   BaseType_t must_yield_from_isr = pdFALSE;
   semaphore_give(active_writers_semaphore, &must_yield_from_isr);
   if(!tracing_enabled) {
-    goto exit;
+    goto cleanup;
   }
 
   uint8_t task_id = get_current_task_id();
@@ -385,7 +414,7 @@ void IRAM_ATTR trace_flow_in(uint16_t link_in) {
     insert_link_event(link_in, LINK_TYPE_IN, now, cpu_id, task_id);
   }
 
-  exit:
+  cleanup:
   semaphore_take(active_writers_semaphore, &must_yield_from_isr);
   if(must_yield_from_isr)
     portYIELD_FROM_ISR();
@@ -401,7 +430,7 @@ void IRAM_ATTR trace_instant_linked(const char* name, uint16_t link_in, uint16_t
   BaseType_t must_yield_from_isr = pdFALSE;
   semaphore_give(active_writers_semaphore, &must_yield_from_isr);
   if(!tracing_enabled) {
-    goto exit;
+    goto cleanup;
   }
 
   uint8_t task_id = get_current_task_id();
@@ -436,7 +465,7 @@ void IRAM_ATTR trace_instant_linked(const char* name, uint16_t link_in, uint16_t
     insert_link_event(*link_out, LINK_TYPE_OUT, now, cpu_id, task_id);
   }
 
-  exit:
+  cleanup:
   semaphore_take(active_writers_semaphore, &must_yield_from_isr);
   if(must_yield_from_isr)
     portYIELD_FROM_ISR();
@@ -446,7 +475,7 @@ void IRAM_ATTR trace_counter(const char* name, int32_t value, uint8_t color) {
   BaseType_t must_yield_from_isr = pdFALSE;
   semaphore_give(active_writers_semaphore, &must_yield_from_isr);
   if(!tracing_enabled) {
-    goto exit;
+    goto cleanup;
   }
 
   uint8_t task_id = get_current_task_id();
@@ -465,7 +494,7 @@ void IRAM_ATTR trace_counter(const char* name, int32_t value, uint8_t color) {
   entry->name = name;
   entry->value = value;
 
-  exit:
+  cleanup:
   semaphore_take(active_writers_semaphore, &must_yield_from_isr);
   if(must_yield_from_isr)
     portYIELD_FROM_ISR();
