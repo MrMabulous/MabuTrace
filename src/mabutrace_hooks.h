@@ -46,4 +46,4 @@ void trace_task_switch(unsigned char type);
 }
 #endif
 
-#endif // FREERTOS_TRACE_HOOKS_H
+#endif // __MABUTRACE_HOOKS_H__

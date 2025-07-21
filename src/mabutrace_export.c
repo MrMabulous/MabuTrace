@@ -90,7 +90,7 @@ esp_err_t get_json_trace(char* json_buffer, size_t json_buffer_size) {
 
     const char* threadName = pcTaskGetName(task_handles[entry_header->task_id]);
     if(entry_header->task_id == 0) {
-      threadName = (char*)"INTERRUPT";
+      threadName = (entry_header->cpu_id == 0) ? "ISR On CPU 0" : "ISR On CPU 1";
     }
     size_t entry_size;
     switch (entry_header->type) {
@@ -198,7 +198,7 @@ esp_err_t get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const c
 
     const char* threadName = pcTaskGetName(task_handles[entry_header->task_id]);
     if(entry_header->task_id == 0) {
-      threadName = (char*)"INTERRUPT";
+      threadName = (entry_header->cpu_id == 0) ? "ISR On CPU 0" : "ISR On CPU 1";
     }
     size_t entry_size;
     switch (entry_header->type) {
