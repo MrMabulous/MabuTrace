@@ -77,17 +77,6 @@ esp_err_t mabutrace_init() {
   return ESP_OK;
 }
 
-size_t get_smallest_type_size() {
-  assert(profiler_entries && "Profiler has not been initialized");
-  size_t min_size = 1000;
-  for(int i=0; i<sizeof(type_sizes); i++) {
-    size_t size = type_sizes[i];
-    if(size != 0 && size < min_size)
-      min_size = size;
-  }
-  return min_size;
-}
-
 esp_err_t mabutrace_deinit() {
   if(!profiler_entries)
     return ESP_ERR_INVALID_STATE;
@@ -101,10 +90,6 @@ esp_err_t mabutrace_deinit() {
   free(profiler_entries);
   profiler_entries = NULL;
   return ESP_OK;
-}
-
-size_t get_buffer_size() {
-  return PROFILER_BUFFER_SIZE_IN_BYTES;
 }
 
 void set_trace_interrupts_within_interrupted_tasks(bool enabled) {
@@ -240,10 +225,6 @@ const char* suspend_tracing_and_get_profiler_entries(size_t* out_start_idx, size
 
 void resume_tracing() {
   tracing_enabled = true;
-}
-
-size_t get_num_task_handles() {
-  return 16;
 }
 
 const TaskHandle_t* profiler_get_task_handles() {

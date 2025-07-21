@@ -39,8 +39,6 @@ static const char* json_footer = "    {}\n"
                                  "  }\n"
                                  "}";
 
-static const size_t header_and_footer_bytes = 128; // rounded up
-
 static const char* colorNameLookup[] = {
   "",                                        // COLOR_UNDEFINED
   ",\"cname\":\"good\"",                     // COLOR_GREEN
@@ -55,130 +53,12 @@ static const char* colorNameLookup[] = {
   ",\"cname\":\"grey\""                      // COLOR_LIGHT_GRAY
 };
 
-size_t get_json_size() {
-  // compute conservative buffer size.
-  size_t min_type_size = get_smallest_type_size();
-  size_t max_number_elements = get_buffer_size() / min_type_size;
-  size_t json_buffer_size = header_and_footer_bytes + max_number_elements * MAX_CHARS_PER_ENTRY;
-  return json_buffer_size;
-}
-
-esp_err_t get_json_trace(char* json_buffer, size_t json_buffer_size) {
-  ESP_LOGI(TAG, "Starting json trace export.");
-  esp_err_t res = ESP_OK;
-  assert(json_buffer_size >= get_json_size() && "Buffer too small.");
-  const size_t profiler_buffer_size = get_buffer_size();
-  size_t start_idx;
-  size_t end_idx;
-  const char* profiler_entries = suspend_tracing_and_get_profiler_entries(&start_idx, &end_idx);
-  const TaskHandle_t* task_handles = profiler_get_task_handles();
-
-  size_t lineLength = sprintf(json_buffer, "%s", json_header);
-  
-  char* chunk = json_buffer + lineLength;
-  size_t ofst = 0;
-  size_t idx = start_idx;
-  size_t loopCount = 0;
-  int entry_counter = 0;
-  do {
-    entry_header_t* entry_header = (entry_header_t*)(profiler_entries + idx);
-    if(entry_header->type == EVENT_TYPE_NONE) {
-      idx = 0;
-      loopCount++;
-      continue;
-    }
-
-    const char* threadName = pcTaskGetName(task_handles[entry_header->task_id]);
-    if(entry_header->task_id == 0) {
-      threadName = (entry_header->cpu_id == 0) ? "ISR On CPU 0" : "ISR On CPU 1";
-    }
-    size_t entry_size;
-    switch (entry_header->type) {
-      case EVENT_TYPE_DURATION: {
-        duration_entry_t* entry = (duration_entry_t*)entry_header;
-        entry_size = sizeof(duration_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"X\",\"pid\":1,\"tid\":\"%s\",\"ts\":%llu,\"dur\":%llu,\"args\":{\"cpu\":%d}},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (unsigned long long int)entry->time_duration_microseconds, (int)entry_header->cpu_id);
-        break;
-      }
-      case EVENT_TYPE_DURATION_COLORED: {
-        duration_colored_entry_t* entry = (duration_colored_entry_t*)entry_header;
-        entry_size = sizeof(duration_colored_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"X\",\"pid\":1,\"tid\":\"%s\",\"ts\":%llu,\"dur\":%llu,\"args\":{\"cpu\":%d}%s},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (unsigned long long int)entry->time_duration_microseconds, (int)entry_header->cpu_id, colorNameLookup[entry->color]);
-        break;
-      }
-      case EVENT_TYPE_INSTANT_COLORED: {
-        instant_colored_entry_t* entry = (instant_colored_entry_t*)entry_header;
-        entry_size = sizeof(instant_colored_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"i\",\"pid\":1,\"tid\":\"%s\",\"ts\":%llu,\"s\":\"p\",\"args\":{\"cpu\":%d}%s},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (int)entry_header->cpu_id, colorNameLookup[entry->color]);
-        break;
-      }
-      case EVENT_TYPE_COUNTER: {
-        counter_entry_t* entry = (counter_entry_t*)entry_header;
-        entry_size = sizeof(counter_entry_t);
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"ph\":\"C\",\"pid\":1,\"tid\":\"%s\",\"ts\":%llu,\"args\":{\"value\":%d}},\n",
-                             entry->name, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds, (int)entry->value);
-        break;
-      }
-      case EVENT_TYPE_LINK: {
-        link_entry_t* entry = (link_entry_t*)entry_header;
-        entry_size = sizeof(link_entry_t);
-        char phase = (entry->link_type == LINK_TYPE_IN) ? 'f' : 's';
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"flow\",\"cat\":\"flow\",\"id\":%u,\"ph\":\"%c\",\"pid\":1,\"tid\":\"%s\",\"ts\":%llu},\n",
-                            (unsigned int)entry->link, phase, threadName, (unsigned long long int)entry->time_stamp_begin_microseconds);
-        break;
-      }
-      case EVENT_TYPE_TASK_SWITCH_IN:
-      case EVENT_TYPE_TASK_SWITCH_OUT: {
-        task_switch_entry_t* entry = (task_switch_entry_t*)entry_header;
-        entry_size = sizeof(task_switch_entry_t);
-        char phase = (entry_header->type == EVENT_TYPE_TASK_SWITCH_IN) ? 'B' : 'E';
-        char* cpu_name = (entry_header->cpu_id == 0) ? "CPU 0" : "CPU 1";
-        // Using the CPU name as tid since this doesn't track a particular task but task execution on a particular CPU core
-        lineLength = sprintf(chunk + ofst, "    {\"name\":\"%s\",\"cat\":\"task\",\"ph\":\"%c\",\"pid\":2,\"tid\":\"%s\",\"ts\":%llu},\n",
-                             threadName, phase, cpu_name, (unsigned long long int)entry->time_stamp);
-        break;
-      }
-      case EVENT_TYPE_NONE:
-      default: {
-        int type = entry_header->type;
-        ESP_LOGE(TAG, "invalid event type: %d\n", type);
-        res = ESP_ERR_INVALID_STATE;
-        goto cleanup;
-        break;
-      }
-    }
-    ofst += lineLength;
-    assert(ofst <= json_buffer_size && "Buffer overflow.");
-
-    // advance idx
-    idx += entry_size;
-    if(idx >= profiler_buffer_size) {
-      loopCount++;
-      idx = 0;
-    }
-    entry_counter++;
-    if(entry_counter % 100==0)
-      vTaskDelay(pdMS_TO_TICKS(1));
-  } while (idx != end_idx && loopCount <= 1);
-
-  lineLength = sprintf(chunk + ofst, "%s", json_footer);
-
-  cleanup:
-  resume_tracing();
-  return res;
-}
-
 esp_err_t get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const char*, size_t)) {
   esp_err_t res = ESP_OK;
   char buf[MAX_CHARS_PER_ENTRY];
-  const size_t profiler_buffer_size = get_buffer_size();
   size_t start_idx;
   size_t end_idx;
   const char* profiler_entries = suspend_tracing_and_get_profiler_entries(&start_idx, &end_idx);
-  size_t num_task_handles = get_num_task_handles();
   const TaskHandle_t* task_handles = profiler_get_task_handles();
 
   size_t lineLength = snprintf(buf, sizeof(buf), "%s", json_header);
@@ -263,7 +143,7 @@ esp_err_t get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const c
 
     // advance idx
     idx += entry_size;
-    if(idx >= profiler_buffer_size) {
+    if(idx >= PROFILER_BUFFER_SIZE_IN_BYTES) {
       loopCount++;
       idx = 0;
     }

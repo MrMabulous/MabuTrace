@@ -183,16 +183,11 @@ typedef struct {
 esp_err_t mabutrace_init();
 esp_err_t mabutrace_deinit();
 esp_err_t mabutrace_start_server(int port);
-size_t get_json_size();
-esp_err_t get_json_trace(char* json_buffer, size_t json_buffer_size);
 esp_err_t get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const char*, size_t));
 void set_trace_interrupts_within_interrupted_tasks(bool enabled);
 
-size_t get_smallest_type_size();
-size_t get_buffer_size();
 const char* suspend_tracing_and_get_profiler_entries(size_t* out_start_idx, size_t* out_end_idx);
 void resume_tracing();
-size_t get_num_task_handles();
 const TaskHandle_t* profiler_get_task_handles();
 profiler_duration_handle_t trace_begin(const char* name, uint8_t color);
 profiler_duration_handle_t trace_begin_linked(const char* name, uint16_t link_in, uint16_t* link_out, uint8_t color);
