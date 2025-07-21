@@ -35,6 +35,7 @@ static volatile portMUX_TYPE link_index_mutex = portMUX_INITIALIZER_UNLOCKED;
 static volatile TaskHandle_t task_handles[16];
 static volatile uint8_t type_sizes[8];
 static volatile bool tracing_enabled = false;
+static volatile bool trace_interrupts_within_interrupted_tasks = false;
 static SemaphoreHandle_t active_writers_semaphore; // Tracks in-flight writers
 
 esp_err_t mabutrace_init() {
@@ -106,8 +107,12 @@ size_t get_buffer_size() {
   return PROFILER_BUFFER_SIZE_IN_BYTES;
 }
 
+void set_trace_interrupts_within_interrupted_tasks(bool enabled) {
+  trace_interrupts_within_interrupted_tasks = enabled;
+}
+
 static inline TaskHandle_t IRAM_ATTR get_current_task_handle() {
-  if (xPortInIsrContext()) {
+  if (!trace_interrupts_within_interrupted_tasks && xPortInIsrContext()) {
     return NULL;
   }
   else {

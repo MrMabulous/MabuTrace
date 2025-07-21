@@ -186,6 +186,7 @@ esp_err_t mabutrace_start_server(int port);
 size_t get_json_size();
 esp_err_t get_json_trace(char* json_buffer, size_t json_buffer_size);
 esp_err_t get_json_trace_chunked(void* ctx, void (*process_chunk)(void*, const char*, size_t));
+void set_trace_interrupts_within_interrupted_tasks(bool enabled);
 
 size_t get_smallest_type_size();
 size_t get_buffer_size();
