@@ -44,7 +44,7 @@ hw_timer_t *timer = NULL;
 // Define Queues
 QueueHandle_t Queue1, Queue2;
 typedef struct {
-  char line[400];
+  char line[256];
   uint16_t link;
 } message_t;
 
