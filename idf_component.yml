@@ -1,5 +1,6 @@
 ## ESP-IDF Component Manifest
 version: "1.0.0"
+license: "GPL-3.0-or-later"
 description: A lightweight C and C++ compatible tracing library for ESP32 with minimal overhead
 url: "https://github.com/mabuware/MabuTrace"
 repository: "https://github.com/mabuware/MabuTrace.git"
