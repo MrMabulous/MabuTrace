@@ -25,7 +25,7 @@ The library is written to be highly efficient, using a binary circular buffer to
 Add MabuTrace as a library dependency in your `platformio.ini`:
 ```ini
 lib_deps =
-    https://github.com/MrMabulous/MabuTrace.git
+    https://github.com/mabuware/MabuTrace.git
 ```
 Or, place the library in your project's `lib/` directory.
 
@@ -43,7 +43,7 @@ Add the following to your project's `idf_component.yml` manifest:
 ```yaml
 dependencies:
   mabutrace:
-    git: https://github.com/MrMabulous/MabuTrace.git
+    git: https://github.com/mabuware/MabuTrace.git
     version: "*"
 ```
 
@@ -53,7 +53,7 @@ Alternatively, clone the repository into your `components` directory:
 
 ```sh
 cd your-project/components
-git clone https://github.com/MrMabulous/MabuTrace.git
+git clone https://github.com/mabuware/MabuTrace.git
 ```
 
 ### Basic Usage
