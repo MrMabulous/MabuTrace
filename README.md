@@ -72,7 +72,7 @@ dependencies:
 
 Or, place the library in your project's `components/` directory.
 
-**if framework = Arduino""
+**if framework = Arduino**
 
 Add MabuTrace as a library dependency in your `platformio.ini`:
 ```ini
