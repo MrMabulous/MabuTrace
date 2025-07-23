@@ -23,6 +23,7 @@
 
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "freertos/semphr.h"
 
 static const char *TAG = "MABUTRACE";
 

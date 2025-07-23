@@ -21,15 +21,18 @@ The library is written to be highly efficient, using a binary circular buffer to
 
 ### Installation
 
-#### Arduino (PlatformIO)
-Add MabuTrace as a library dependency in your `platformio.ini`:
-```ini
-lib_deps =
-    https://github.com/mabuware/MabuTrace.git
-```
-Or, place the library in your project's `lib/` directory.
-
 #### Arduino (IDE)
+
+**1. Using Library Manager**
+
+1.  In the Arduino IDE, go to `Tools` -> `Manage Libraries...`.
+2.  Enter "mabutrace" in the search field
+3.  Click `INSTALL`
+
+**2. Manual Install**
+
+Alternatively, download and install this repository manually:
+
 1.  Download this repository as a ZIP file.
 2.  In the Arduino IDE, go to `Sketch` -> `Include Library` -> `Add .ZIP Library...`.
 3.  Select the downloaded ZIP file.
@@ -42,8 +45,7 @@ Add the following to your project's `idf_component.yml` manifest:
 
 ```yaml
 dependencies:
-  mabutrace:
-    git: https://github.com/mabuware/MabuTrace.git
+  mabuware/mabutrace:
     version: "*"
 ```
 
@@ -55,6 +57,28 @@ Alternatively, clone the repository into your `components` directory:
 cd your-project/components
 git clone https://github.com/mabuware/MabuTrace.git
 ```
+
+#### PlatformIO
+
+**if framework = espidf**
+
+add a `idf_component.yml` manifest file to your src directory with the following content:
+
+```yaml
+dependencies:
+  mabuware/mabutrace:
+    version: "*"
+```
+
+Or, place the library in your project's `components/` directory.
+
+**if framework = Arduino""
+
+Add MabuTrace as a library dependency in your `platformio.ini`:
+```ini
+lib_deps = mabuware/mabutrace
+```
+Or, place the library in your project's `lib/` directory.
 
 ### Basic Usage
 
