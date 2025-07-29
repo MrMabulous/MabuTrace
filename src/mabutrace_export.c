@@ -27,11 +27,14 @@
 static const char *TAG = "MABUTRACE";
 
 // An upper bound estimate for the number of chars required for the json output of each entry
-#define MAX_CHARS_PER_ENTRY 256
+#define MAX_CHARS_PER_ENTRY 512
 
 static const char* json_header = "{\n"
                                  "  \"traceEvents\": [\n";
-static const char* json_footer = "    {}\n"
+static const char* json_footer = "    {\"name\": \"process_name\", \"ph\": \"M\", \"pid\": 1, \"args\": {\"name\": \"Tasks & Interrupts\"}},\n"
+                                 "    {\"name\": \"process_name\", \"ph\": \"M\", \"pid\": 2, \"args\": {\"name\": \"CPU Task Scheduling\"}},\n"
+                                 "    {\"name\": \"process_sort_index\", \"ph\": \"M\", \"pid\": 1, \"args\": {\"sort_index\": 0}},\n"
+                                 "    {\"name\": \"process_sort_index\", \"ph\": \"M\", \"pid\": 2, \"args\": {\"sort_index\": 1}}\n"
                                  "  ],\n"
                                  "  \"displayTimeUnit\": \"ms\",\n"
                                  "  \"otherData\": {\n"
