@@ -207,7 +207,7 @@ static const char* download_html = R"html_string(
                     const writable = await handle.createWritable();
                     await writable.write(traceBlob);
                     await writable.close();
-                    info.textContent = 'Trace saved successfully!';
+                    info.textContent = 'Trace saved successfully. Open it now in chrome://tracing';
                     return;
                 } catch (err) {
                     if (err.name === 'AbortError') {
@@ -226,7 +226,7 @@ static const char* download_html = R"html_string(
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(link.href);
-                info.textContent = 'Trace download initiated!';
+                info.textContent = 'Trace downloaded. Open it now in chrome://tracing';
             } catch (err) {
                 console.error('Fallback save failed:', err);
                 info.textContent = 'Save failed.';
