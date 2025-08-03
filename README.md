@@ -19,6 +19,10 @@ The library is written to be highly efficient, using a binary circular buffer to
 
 ## Getting Started
 
+### Video Tutorial
+
+[![Video Tutorial on how to use MabuTrace](http://img.youtube.com/vi/9MLz3AwhoIg/0.jpg)](http://www.youtube.com/watch?v=9MLz3AwhoIg)
+
 ### Installation
 
 #### Arduino (IDE)
