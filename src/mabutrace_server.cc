@@ -56,7 +56,9 @@ esp_err_t request_handler_chunked(httpd_req_t *req) {
 esp_err_t mabutrace_start_server(int port) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.task_priority++;
+    int default_port = config.server_port;
     config.server_port = port;
+    config.ctrl_port += (port - default_port);
     httpd_handle_t server_handle;
 
     ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
